@@ -1,0 +1,75 @@
+## Cursor Implementation Prompt – Uzi Recommender
+
+You are editing a Next.js 14 (App Router) + Prisma + NextAuth repo. Make concrete, minimal, correct edits with repo awareness.
+
+Repo context
+- UI at `src/app/page.js` (client component). Tailwind + `lucide-react`.
+- APIs at `src/app/api/*` including `songs`, `recommendations`, `auth`.
+- Prisma schema at `prisma/schema.prisma`, seed at `prisma/seed.js`.
+- Auth config at `src/lib/auth.js`, Prisma client at `src/lib/prisma.js`.
+
+Rules
+- Only modify files necessary for the change. Keep unrelated code intact.
+- Match existing code style and imports. Avoid broad refactors.
+- After schema changes: update schema, run migration (developer will execute), and ensure code compiles with new types.
+- Validate inputs (Zod or minimal manual checks) and return consistent API shapes.
+- Don’t expose secrets. Assume env values in `env.local`.
+
+Tasks
+"""
+<PUT CONCRETE TASKS HERE>
+"""
+
+Acceptance criteria
+- Build succeeds (`next build`).
+- Lint passes (`next lint`) or has no new errors.
+- New APIs return expected JSON and handle error cases.
+- UI renders and basic flows work (songs list, details, recommendations).
+
+Notes for this repo
+- If adding NextAuth Prisma adapter models (Account, Session, VerificationToken, Authenticator), ensure names match NextAuth docs and keep table names mapped consistently.
+- If touching search in `page.js`, debounce inputs (300–500ms) and keep loading states.
+- For ratings consistency, if you add write endpoints, recompute `avgRating` and `totalRatings` transactionally.
+
+## Claude Planning Prompt – Uzi Recommender
+
+You are helping plan changes for a Next.js 14 (App Router) + Prisma + NextAuth project. The repo path is `uzi-recommender-full-stack`. Propose a high-quality plan and a concise, checkable task list.
+
+Context
+- Frontend: `src/app/page.js` (client component). Tailwind + `lucide-react`.
+- APIs: `src/app/api/songs/route.js`, `src/app/api/recommendations/route.js`, `src/app/api/auth/[...nextauth]/route.js`, `src/app/api/auth/register/route.js`.
+- Prisma: `prisma/schema.prisma` with `Song`, `Genre`, `Mood`, `Review`, `Rating`, etc. Seed at `prisma/seed.js`.
+- Auth: NextAuth with Prisma adapter in `src/lib/auth.js`. Some adapter models may be missing from schema.
+
+Goal
+Given the user request below, produce:
+1) Brief design outline (what to change and why)
+2) Migration/implementation plan in steps
+3) Risks, validations, and test plan
+
+Principles
+- Prefer incremental, testable steps. Avoid big-bang refactors.
+- Respect existing naming and patterns.
+- Identify schema changes and data migrations explicitly.
+- Call out environment variables or secrets required.
+
+Output format
+## Design
+- 3–6 bullets.
+
+## Plan
+- Numbered steps (≤10), each actionable and scoped.
+- Note affected files and new files.
+
+## Risks & Notes
+- Validation, security, performance, rollout concerns.
+
+## Test Plan
+- API/unit ideas, manual steps, acceptance criteria.
+
+User request
+"""
+<PUT USER REQUEST HERE>
+"""
+
+
