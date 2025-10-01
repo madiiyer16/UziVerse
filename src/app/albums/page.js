@@ -1,22 +1,23 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Play, Calendar, Music, ArrowLeft } from 'lucide-react';
+import { Play, Calendar, Music, ArrowLeft, Search } from 'lucide-react';
 import Link from 'next/link';
 
 export default function AlbumsPage() {
   const [albums, setAlbums] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState('all');
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     fetchAlbums();
-  }, [activeFilter]);
+  }, [activeFilter, searchTerm]);
 
   const fetchAlbums = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/albums?type=${activeFilter}`);
+      const response = await fetch(`/api/albums?type=${activeFilter}&search=${encodeURIComponent(searchTerm)}`);
       const data = await response.json();
       
       if (data.success) {
@@ -39,65 +40,75 @@ export default function AlbumsPage() {
     return colors[type] || 'bg-gray-100 text-gray-800';
   };
 
-  const AlbumCard = ({ album }) => (
-    <Link href={`/albums/${encodeURIComponent(album.name)}`}>
-      <div className="bg-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 p-6 cursor-pointer group">
-        <div className="flex gap-4">
-          {album.imageUrl ? (
-            <img
-              src={album.imageUrl}
-              alt={album.name}
-              className="w-20 h-20 rounded-lg object-cover group-hover:scale-105 transition-transform"
-            />
-          ) : (
-            <div className="w-20 h-20 bg-gradient-to-br from-purple-400 to-pink-400 rounded-lg flex items-center justify-center">
-              <Music className="w-8 h-8 text-white" />
+const AlbumCard = ({ album }) => (
+  <Link href={`/albums/${encodeURIComponent(album.name)}`}>
+    <div className="bg-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 p-6 cursor-pointer group">
+      <div className="flex gap-4">
+        {album.imageUrl ? (
+          <img
+            src={album.imageUrl}
+            alt={album.name}
+            className="w-20 h-20 rounded-lg object-cover group-hover:scale-105 transition-transform"
+          />
+        ) : (
+          <div className="w-20 h-20 bg-gradient-to-br from-purple-400 to-pink-400 rounded-lg flex items-center justify-center">
+            <Music className="w-8 h-8 text-white" />
+          </div>
+        )}
+
+        <div className="flex-1">
+          <div className="flex items-start justify-between mb-2">
+            <h3 className="font-bold text-lg text-gray-900 group-hover:text-purple-600 transition-colors">
+              {album.name}
+            </h3>
+            <span
+              className={`px-2 py-1 rounded-full text-xs font-medium ${getReleaseTypeColor(
+                album.releaseType
+              )}`}
+            >
+              {album.releaseType}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-4 text-sm text-gray-600">
+            <div className="flex items-center gap-1">
+              <Calendar className="w-4 h-4" />
+              {album.year}
             </div>
-          )}
-          
-          <div className="flex-1">
-            <div className="flex items-start justify-between mb-2">
-              <h3 className="font-bold text-lg text-gray-900 group-hover:text-purple-600 transition-colors">
-                {album.name}
-              </h3>
-              <span className={`px-2 py-1 rounded-full text-xs font-medium ${getReleaseTypeColor(album.releaseType)}`}>
-                {album.releaseType}
-              </span>
+            <div className="flex items-center gap-1">
+              <Music className="w-4 h-4" />
+              {album.trackCount} tracks
             </div>
-            
-            <div className="flex items-center gap-4 text-sm text-gray-600">
-              <div className="flex items-center gap-1">
-                <Calendar className="w-4 h-4" />
-                {album.year}
-              </div>
-              <div className="flex items-center gap-1">
-                <Music className="w-4 h-4" />
-                {album.trackCount} tracks
-              </div>
-            </div>
-            
-            <div className="mt-3 flex items-center gap-2">
-              <button className="text-purple-600 hover:text-purple-800 font-medium text-sm">
-                View Tracks →
-              </button>
-              {album.spotifyId && (
-                <a
-                  href={`https://open.spotify.com/album/${album.spotifyId}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                  className="flex items-center gap-1 text-green-600 hover:text-green-700 text-sm"
-                >
-                  <Play className="w-3 h-3" />
-                  Spotify
-                </a>
-              )}
-            </div>
+          </div>
+
+          <div className="mt-3 flex items-center gap-2">
+            {/* Prevent click bubbling so card doesn’t trigger Link */}
+            <button
+              onClick={(e) => e.stopPropagation()}
+              className="text-purple-600 hover:text-purple-800 font-medium text-sm"
+            >
+              View Tracks →
+            </button>
+
+            {album.spotifyId && (
+              <a
+                href={`https://open.spotify.com/album/${album.spotifyId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="flex items-center gap-1 text-green-600 hover:text-green-700 text-sm"
+              >
+                <Play className="w-3 h-3" />
+                Spotify
+              </a>
+            )}
           </div>
         </div>
       </div>
-    </Link>
-  );
+    </div>
+  </Link>
+);
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50">
@@ -118,7 +129,7 @@ export default function AlbumsPage() {
 
         {/* Filter Tabs */}
         <div className="mb-8">
-          <div className="flex justify-center">
+          <div className="flex justify-center mb-4">
             <div className="bg-white rounded-lg p-1 shadow-md">
               {[
                 { key: 'all', label: 'All Releases' },
@@ -137,6 +148,20 @@ export default function AlbumsPage() {
                   {filter.label}
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* Search Bar */}
+          <div className="max-w-md mx-auto">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <input
+                type="text"
+                placeholder="Search albums or songs..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              />
             </div>
           </div>
         </div>

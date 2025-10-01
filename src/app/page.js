@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Star, Play, User, Search, Filter, TrendingUp, Loader, LogIn, LogOut, UserCircle, Music2, ChevronRight } from 'lucide-react';
+import { Star, Play, User, Search, Filter, TrendingUp, Loader, LogIn, LogOut, Music2, ChevronRight } from 'lucide-react';
 import { useSession, signOut } from 'next-auth/react';
 import Link from 'next/link';
 
@@ -17,9 +17,8 @@ const UziRecommender = () => {
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
 
-  // Fetch songs from database with pagination
   useEffect(() => {
-    fetchSongs(true); // Reset pagination for new search/tab
+    fetchSongs(true);
   }, [searchTerm, activeTab]);
 
   const fetchSongs = async (reset = false) => {
@@ -46,8 +45,6 @@ const UziRecommender = () => {
           setCurrentPage(prev => prev + 1);
         }
         setHasMore(data.pagination?.hasMore || false);
-      } else {
-        console.error('Failed to fetch songs:', data.error);
       }
     } catch (error) {
       console.error('Error fetching songs:', error);
@@ -63,7 +60,6 @@ const UziRecommender = () => {
     }
   };
 
-  // Fetch recommendations for a song
   const fetchRecommendations = async (songId) => {
     try {
       const response = await fetch(`/api/recommendations?songId=${songId}&limit=3`);
@@ -82,7 +78,6 @@ const UziRecommender = () => {
     fetchRecommendations(song.id);
   };
 
-  // User menu component
   const UserMenu = () => {
     if (status === "loading") {
       return <div className="w-8 h-8 rounded-full bg-gray-200 animate-pulse"></div>;
@@ -91,17 +86,11 @@ const UziRecommender = () => {
     if (!session) {
       return (
         <div className="flex items-center gap-3">
-          <Link
-            href="/auth/signin"
-            className="flex items-center gap-2 px-4 py-2 text-purple-600 hover:text-purple-700 font-medium"
-          >
+          <Link href="/auth/signin" className="flex items-center gap-2 px-4 py-2 text-purple-600 hover:text-purple-700 font-medium">
             <LogIn className="w-4 h-4" />
             Sign In
           </Link>
-          <Link
-            href="/auth/signup"
-            className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-          >
+          <Link href="/auth/signup" className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors">
             Sign Up
           </Link>
         </div>
@@ -111,10 +100,7 @@ const UziRecommender = () => {
     return (
       <div className="flex items-center gap-3">
         <span className="text-gray-700">Welcome, {session.user.username}!</span>
-        <button
-          onClick={() => signOut({ callbackUrl: '/' })}
-          className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-800 font-medium"
-        >
+        <button onClick={() => signOut({ callbackUrl: '/' })} className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-800 font-medium">
           <LogOut className="w-4 h-4" />
           Sign Out
         </button>
@@ -122,7 +108,7 @@ const UziRecommender = () => {
     );
   };
 
-  const SongCard = ({ song, showRecommendationScore = false }) => (
+  const SongCard = ({ song }) => (
     <div className="bg-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 p-6 border border-gray-100">
       <div className="flex justify-between items-start mb-4">
         <div className="flex-1">
@@ -130,70 +116,43 @@ const UziRecommender = () => {
           <p className="text-purple-600 font-medium">{song.album} ({song.year})</p>
           <div className="flex flex-wrap gap-2 mt-2">
             {song.genre?.map(g => (
-              <span key={g} className="px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-xs">
-                {g}
-              </span>
+              <span key={g} className="px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-xs">{g}</span>
             ))}
           </div>
         </div>
-        {showRecommendationScore && (
-          <div className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium">
-            {Math.round(song.recommendationScore * 100)}% match
-          </div>
-        )}
       </div>
       
       <div className="flex items-center mb-4">
         <div className="flex items-center">
           {[...Array(5)].map((_, i) => (
-            <Star
-              key={i}
-              className={`w-4 h-4 ${i < Math.round(song.avgRating) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`}
-            />
+            <Star key={i} className={`w-4 h-4 ${i < Math.round(song.avgRating) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`} />
           ))}
-          <span className="ml-2 text-gray-600 text-sm">
-            {song.avgRating} ({song.totalRatings} reviews)
-          </span>
+          <span className="ml-2 text-gray-600 text-sm">{song.avgRating} ({song.totalRatings} reviews)</span>
         </div>
       </div>
 
       <div className="flex flex-wrap gap-2 mb-4">
         {song.mood?.map(mood => (
-          <span key={mood} className="px-2 py-1 bg-gray-100 text-gray-700 rounded-full text-xs">
-            {mood}
-          </span>
+          <span key={mood} className="px-2 py-1 bg-gray-100 text-gray-700 rounded-full text-xs">{mood}</span>
         ))}
       </div>
 
       <div className="flex gap-2 mb-4">
         {song.spotifyUrl && (
-          <a
-            href={song.spotifyUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex-1 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors"
-          >
+          <a href={song.spotifyUrl} target="_blank" rel="noopener noreferrer" className="flex-1 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors">
             <Play className="w-4 h-4" />
             Spotify
           </a>
         )}
         {song.youtubeUrl && (
-          <a
-            href={song.youtubeUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex-1 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors"
-          >
+          <a href={song.youtubeUrl} target="_blank" rel="noopener noreferrer" className="flex-1 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors">
             <Play className="w-4 h-4" />
             YouTube
           </a>
         )}
       </div>
 
-      <button
-        onClick={() => handleSongSelect(song)}
-        className="w-full bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg transition-colors"
-      >
+      <button onClick={() => handleSongSelect(song)} className="w-full bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg transition-colors">
         View Details & Reviews
       </button>
     </div>
@@ -211,12 +170,7 @@ const UziRecommender = () => {
                 <h2 className="text-2xl font-bold text-gray-900">{song.title}</h2>
                 <p className="text-purple-600 text-lg">{song.album} ({song.year})</p>
               </div>
-              <button
-                onClick={onClose}
-                className="text-gray-400 hover:text-gray-600 text-2xl"
-              >
-                ×
-              </button>
+              <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl">×</button>
             </div>
           </div>
 
@@ -224,28 +178,13 @@ const UziRecommender = () => {
             <div>
               <h3 className="text-xl font-semibold mb-4">Song Details</h3>
               <div className="space-y-3">
-                <div>
-                  <span className="font-medium text-gray-700">Genres: </span>
-                  <span className="text-gray-600">{song.genre?.join(", ") || "N/A"}</span>
-                </div>
-                <div>
-                  <span className="font-medium text-gray-700">Mood: </span>
-                  <span className="text-gray-600">{song.mood?.join(", ") || "N/A"}</span>
-                </div>
+                <div><span className="font-medium text-gray-700">Genres: </span><span className="text-gray-600">{song.genre?.join(", ") || "N/A"}</span></div>
+                <div><span className="font-medium text-gray-700">Mood: </span><span className="text-gray-600">{song.mood?.join(", ") || "N/A"}</span></div>
                 {song.audioFeatures && (
                   <>
-                    <div>
-                      <span className="font-medium text-gray-700">Energy: </span>
-                      <span className="text-gray-600">{Math.round((song.audioFeatures.energy || 0) * 100)}%</span>
-                    </div>
-                    <div>
-                      <span className="font-medium text-gray-700">Danceability: </span>
-                      <span className="text-gray-600">{Math.round((song.audioFeatures.danceability || 0) * 100)}%</span>
-                    </div>
-                    <div>
-                      <span className="font-medium text-gray-700">Tempo: </span>
-                      <span className="text-gray-600">{Math.round(song.audioFeatures.tempo || 0)} BPM</span>
-                    </div>
+                    <div><span className="font-medium text-gray-700">Energy: </span><span className="text-gray-600">{Math.round((song.audioFeatures.energy || 0) * 100)}%</span></div>
+                    <div><span className="font-medium text-gray-700">Danceability: </span><span className="text-gray-600">{Math.round((song.audioFeatures.danceability || 0) * 100)}%</span></div>
+                    <div><span className="font-medium text-gray-700">Tempo: </span><span className="text-gray-600">{Math.round(song.audioFeatures.tempo || 0)} BPM</span></div>
                   </>
                 )}
               </div>
@@ -265,10 +204,7 @@ const UziRecommender = () => {
                         {Math.round(rec.recommendationScore * 100)}% match
                       </span>
                     </div>
-                    <button
-                      onClick={() => handleSongSelect(rec)}
-                      className="text-purple-600 hover:text-purple-800 text-sm"
-                    >
+                    <button onClick={() => handleSongSelect(rec)} className="text-purple-600 hover:text-purple-800 text-sm">
                       View Details →
                     </button>
                   </div>
@@ -279,7 +215,6 @@ const UziRecommender = () => {
 
           <div className="p-6 border-t border-gray-200">
             <h3 className="text-xl font-semibold mb-4">Reviews ({song.reviews?.length || 0})</h3>
-            
             <div className="space-y-4 max-h-64 overflow-y-auto">
               {song.reviews?.map(review => (
                 <div key={review.id} className="p-4 border border-gray-200 rounded-lg">
@@ -291,14 +226,7 @@ const UziRecommender = () => {
                     <div className="flex items-center gap-2">
                       <div className="flex">
                         {[...Array(5)].map((_, i) => (
-                          <Star
-                            key={i}
-                            className={`w-4 h-4 ${
-                              i < (review.rating || 0)
-                                ? 'fill-yellow-400 text-yellow-400'
-                                : 'text-gray-300'
-                            }`}
-                          />
+                          <Star key={i} className={`w-4 h-4 ${i < (review.rating || 0) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`} />
                         ))}
                       </div>
                       <span className="text-sm text-gray-500">{review.date}</span>
@@ -306,9 +234,7 @@ const UziRecommender = () => {
                   </div>
                   <p className="text-gray-700">{review.review}</p>
                 </div>
-              )) || (
-                <p className="text-gray-500 text-center py-4">No reviews yet.</p>
-              )}
+              )) || <p className="text-gray-500 text-center py-4">No reviews yet.</p>}
             </div>
           </div>
         </div>
@@ -319,20 +245,23 @@ const UziRecommender = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50">
       <div className="container mx-auto px-4 py-8">
-        {/* Header with user menu */}
         <div className="flex justify-between items-center mb-8">
           <div className="text-center flex-1">
             <h1 className="text-4xl font-bold text-gray-900 mb-2">
               🎵 Uzi<span className="text-purple-600">Verse</span>
             </h1>
-            <p className="text-gray-600 text-lg">
-              Your AI-powered Lil Uzi Vert song recommender & review platform
-            </p>
+            <p className="text-gray-600 text-lg">Your AI-powered Lil Uzi Vert song recommender & review platform</p>
           </div>
           <UserMenu />
         </div>
 
-        {/* Navigation Cards */}
+        <div className="text-center mb-12">
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Discover Lil Uzi Vert's Complete Discography</h2>
+            <p className="text-gray-600">Search through 290+ songs with AI-powered recommendations</p>
+          </div>
+        </div>
+
         <div className="grid md:grid-cols-2 gap-6 mb-8">
           <Link href="/albums" className="group">
             <div className="bg-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 p-6 border border-gray-100">
@@ -341,9 +270,7 @@ const UziRecommender = () => {
                   <Music2 className="w-8 h-8 text-white" />
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-xl font-bold text-gray-900 group-hover:text-purple-600 transition-colors">
-                    Browse Albums & Singles
-                  </h3>
+                  <h3 className="text-xl font-bold text-gray-900 group-hover:text-purple-600 transition-colors">Browse Albums & Singles</h3>
                   <p className="text-gray-600">Explore Lil Uzi Vert's complete discography</p>
                 </div>
                 <ChevronRight className="w-6 h-6 text-gray-400 group-hover:text-purple-600 transition-colors" />
@@ -367,25 +294,11 @@ const UziRecommender = () => {
         <div className="mb-8">
           <div className="flex justify-center mb-4">
             <div className="bg-white rounded-lg p-1 shadow-md">
-              <button
-                onClick={() => setActiveTab("discover")}
-                className={`px-6 py-2 rounded-md transition-colors ${
-                  activeTab === "discover"
-                    ? "bg-purple-500 text-white"
-                    : "text-gray-600 hover:text-purple-600"
-                }`}
-              >
+              <button onClick={() => setActiveTab("discover")} className={`px-6 py-2 rounded-md transition-colors ${activeTab === "discover" ? "bg-purple-500 text-white" : "text-gray-600 hover:text-purple-600"}`}>
                 <TrendingUp className="w-4 h-4 inline mr-2" />
                 Discover
               </button>
-              <button
-                onClick={() => setActiveTab("all")}
-                className={`px-6 py-2 rounded-md transition-colors ${
-                  activeTab === "all"
-                    ? "bg-purple-500 text-white"
-                    : "text-gray-600 hover:text-purple-600"
-                }`}
-              >
+              <button onClick={() => setActiveTab("all")} className={`px-6 py-2 rounded-md transition-colors ${activeTab === "all" ? "bg-purple-500 text-white" : "text-gray-600 hover:text-purple-600"}`}>
                 <Filter className="w-4 h-4 inline mr-2" />
                 All Songs
               </button>
@@ -395,13 +308,7 @@ const UziRecommender = () => {
           <div className="max-w-md mx-auto">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <input
-                type="text"
-                placeholder="Search songs or albums..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-              />
+              <input type="text" placeholder="Search songs or albums..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent" />
             </div>
           </div>
         </div>
@@ -418,39 +325,25 @@ const UziRecommender = () => {
         ) : (
           <>
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {songs.map(song => (
-                <SongCard key={song.id} song={song} />
-              ))}
+              {songs.map(song => <SongCard key={song.id} song={song} />)}
             </div>
             
-            {/* Load More Button */}
             {hasMore && activeTab === "all" && (
               <div className="text-center mt-8">
-                <button
-                  onClick={loadMore}
-                  disabled={loadingMore}
-                  className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
-                >
+                <button onClick={loadMore} disabled={loadingMore} className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50">
                   {loadingMore ? (
                     <div className="flex items-center gap-2">
                       <Loader className="w-4 h-4 animate-spin" />
                       Loading more...
                     </div>
-                  ) : (
-                    `Load More Songs`
-                  )}
+                  ) : 'Load More Songs'}
                 </button>
               </div>
             )}
           </>
         )}
 
-        {selectedSong && (
-          <SongDetailModal
-            song={selectedSong}
-            onClose={() => setSelectedSong(null)}
-          />
-        )}
+        {selectedSong && <SongDetailModal song={selectedSong} onClose={() => setSelectedSong(null)} />}
       </div>
     </div>
   );

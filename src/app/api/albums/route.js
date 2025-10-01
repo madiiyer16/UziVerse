@@ -4,60 +4,73 @@ import { prisma } from '@/lib/prisma';
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
-    const type = searchParams.get('type') || 'all'; // 'albums', 'singles', 'all'
+    const type = searchParams.get('type') || 'all';
+    const search = searchParams.get('search') || '';
 
-    // Get unique albums with song counts
-    const albums = await prisma.song.groupBy({
-      by: ['album', 'year', 'releaseType'],
+    // Get all songs with their albums
+    let songs = await prisma.song.findMany({
       where: {
-        album: {
-          not: null
-        }
+        album: { not: null },
+        ...(search && {
+          OR: [
+            { album: { contains: search, mode: 'insensitive' } },
+            { title: { contains: search, mode: 'insensitive' } }
+          ]
+        })
       },
-      _count: {
-        id: true
-      },
-      orderBy: {
-        year: 'desc'
+      select: {
+        album: true,
+        year: true,
+        releaseType: true,
+        imageUrl: true,
+        spotifyId: true
       }
     });
 
-    // Filter by type if specified
-    const filteredAlbums = type === 'all' ? albums : 
-      albums.filter(album => {
-        if (type === 'albums') return album.releaseType === 'ALBUM';
-        if (type === 'singles') return album.releaseType === 'SINGLE';
-        return true;
-      });
-
-    // Get album artwork from first song in each album
-    const albumsWithArtwork = await Promise.all(
-      filteredAlbums.map(async (album) => {
-        const firstSong = await prisma.song.findFirst({
-          where: { album: album.album },
-          select: { imageUrl: true, spotifyId: true }
+    // Group albums manually, prioritizing songs with images
+    const albumMap = new Map();
+    songs.forEach(song => {
+      if (!albumMap.has(song.album)) {
+        albumMap.set(song.album, {
+          name: song.album,
+          year: song.year,
+          releaseType: song.releaseType,
+          trackCount: 1,
+          imageUrl: song.imageUrl,
+          spotifyId: song.spotifyId
         });
+      } else {
+        const album = albumMap.get(song.album);
+        album.trackCount++;
+        // Update image if current song has one and album doesn't
+        if (song.imageUrl && !album.imageUrl) {
+          album.imageUrl = song.imageUrl;
+          album.spotifyId = song.spotifyId;
+        }
+      }
+    });
 
-        return {
-          name: album.album,
-          year: album.year,
-          releaseType: album.releaseType,
-          trackCount: album._count.id,
-          imageUrl: firstSong?.imageUrl,
-          spotifyId: firstSong?.spotifyId
-        };
-      })
-    );
+    // Convert to array and filter by type
+    let albums = Array.from(albumMap.values());
+    
+    if (type === 'albums') {
+      albums = albums.filter(a => a.releaseType === 'ALBUM');
+    } else if (type === 'singles') {
+      albums = albums.filter(a => a.releaseType === 'SINGLE');
+    }
+
+    // Sort by year descending
+    albums.sort((a, b) => b.year - a.year);
 
     return NextResponse.json({
       success: true,
-      albums: albumsWithArtwork
+      albums
     });
 
   } catch (error) {
     console.error('Albums API Error:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to fetch albums' },
+      { success: false, error: 'Failed to fetch albums', details: error.message },
       { status: 500 }
     );
   }
