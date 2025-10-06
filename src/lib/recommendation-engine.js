@@ -11,6 +11,7 @@ import {
   findSimilarSongs,
   calculateAdvancedSimilarity 
 } from './audio-analysis';
+import { aiEnhancedEngine } from './ai-prediction';
 
 /**
  * Collaborative Filtering Engine
@@ -441,7 +442,7 @@ export class ContentBasedFiltering {
     let weightSum = 0;
 
     for (const preference of userPreferences) {
-      const similarity = calculateAdvancedSimilarity(preference.song, song);
+      const similarity = this.calculateEnhancedSimilarity(preference.song, song);
       const weight = this.getPreferenceWeight(preference);
       
       totalSimilarity += similarity * weight;
@@ -449,6 +450,226 @@ export class ContentBasedFiltering {
     }
 
     return weightSum > 0 ? totalSimilarity / weightSum : 0;
+  }
+
+  /**
+   * Calculate enhanced similarity that handles missing data
+   */
+  calculateEnhancedSimilarity(song1, song2) {
+    const defaultWeights = {
+      audioFeatures: 0.5,
+      genre: 0.2,
+      mood: 0.1,
+      artist: 0.1,
+      popularity: 0.1
+    };
+
+    let totalScore = 0;
+    let weightSum = 0;
+
+    // Audio features similarity
+    if (this.hasAudioFeatures(song1) && this.hasAudioFeatures(song2)) {
+      const audioScore = calculateAdvancedSimilarity(song1, song2);
+      totalScore += audioScore * defaultWeights.audioFeatures;
+      weightSum += defaultWeights.audioFeatures;
+    } else if (this.hasAudioFeatures(song1) || this.hasAudioFeatures(song2)) {
+      // If only one song has audio features, use partial scoring
+      const audioScore = this.calculatePartialAudioSimilarity(song1, song2);
+      totalScore += audioScore * defaultWeights.audioFeatures * 0.5;
+      weightSum += defaultWeights.audioFeatures * 0.5;
+    }
+
+    // Genre similarity
+    if (this.hasGenres(song1) && this.hasGenres(song2)) {
+      const genreScore = this.calculateGenreSimilarity(song1, song2);
+      totalScore += genreScore * defaultWeights.genre;
+      weightSum += defaultWeights.genre;
+    } else if (this.hasGenres(song1) || this.hasGenres(song2)) {
+      // Use predicted genres for missing data
+      const genreScore = this.calculateGenreSimilarityWithPredictions(song1, song2);
+      totalScore += genreScore * defaultWeights.genre * 0.7;
+      weightSum += defaultWeights.genre * 0.7;
+    }
+
+    // Mood similarity
+    if (this.hasMoods(song1) && this.hasMoods(song2)) {
+      const moodScore = this.calculateMoodSimilarity(song1, song2);
+      totalScore += moodScore * defaultWeights.mood;
+      weightSum += defaultWeights.mood;
+    } else if (this.hasMoods(song1) || this.hasMoods(song2)) {
+      // Use predicted moods for missing data
+      const moodScore = this.calculateMoodSimilarityWithPredictions(song1, song2);
+      totalScore += moodScore * defaultWeights.mood * 0.7;
+      weightSum += defaultWeights.mood * 0.7;
+    }
+
+    // Artist similarity
+    const artistScore = song1.artist === song2.artist ? 1 : 0;
+    totalScore += artistScore * defaultWeights.artist;
+    weightSum += defaultWeights.artist;
+
+    // Popularity similarity
+    const popularity1 = song1.popularity || 0;
+    const popularity2 = song2.popularity || 0;
+    const popularityDiff = Math.abs(popularity1 - popularity2) / 100;
+    const popularityScore = 1 - popularityDiff;
+    totalScore += popularityScore * defaultWeights.popularity;
+    weightSum += defaultWeights.popularity;
+
+    return weightSum > 0 ? Math.max(0, Math.min(1, totalScore / weightSum)) : 0;
+  }
+
+  /**
+   * Check if song has audio features
+   */
+  hasAudioFeatures(song) {
+    return song.energy !== null && song.energy !== undefined && song.energy > 0 &&
+           song.danceability !== null && song.danceability !== undefined && song.danceability > 0 &&
+           song.valence !== null && song.valence !== undefined && song.valence > 0;
+  }
+
+  /**
+   * Check if song has genres
+   */
+  hasGenres(song) {
+    return song.genres && song.genres.length > 0;
+  }
+
+  /**
+   * Check if song has moods
+   */
+  hasMoods(song) {
+    return song.moods && song.moods.length > 0;
+  }
+
+  /**
+   * Calculate partial audio similarity when one song has missing features
+   */
+  calculatePartialAudioSimilarity(song1, song2) {
+    const features1 = this.extractAvailableFeatures(song1);
+    const features2 = this.extractAvailableFeatures(song2);
+    
+    const commonFeatures = Object.keys(features1).filter(key => 
+      features2[key] !== undefined && features2[key] !== null
+    );
+
+    if (commonFeatures.length === 0) return 0;
+
+    let similarity = 0;
+    for (const feature of commonFeatures) {
+      const diff = Math.abs(features1[feature] - features2[feature]);
+      similarity += 1 - Math.min(diff, 1);
+    }
+
+    return similarity / commonFeatures.length;
+  }
+
+  /**
+   * Extract available audio features from song
+   */
+  extractAvailableFeatures(song) {
+    const features = {};
+    const featureKeys = ['energy', 'danceability', 'valence', 'tempo', 'acousticness', 'instrumentalness', 'liveness', 'speechiness'];
+    
+    for (const key of featureKeys) {
+      if (song[key] !== null && song[key] !== undefined && song[key] > 0) {
+        features[key] = song[key];
+      }
+    }
+
+    return features;
+  }
+
+  /**
+   * Calculate genre similarity with predictions
+   */
+  calculateGenreSimilarityWithPredictions(song1, song2) {
+    const genres1 = song1.genres?.map(g => g.name) || this.predictGenresFromMetadata(song1);
+    const genres2 = song2.genres?.map(g => g.name) || this.predictGenresFromMetadata(song2);
+
+    if (genres1.length === 0 || genres2.length === 0) return 0;
+
+    const commonGenres = genres1.filter(g => genres2.includes(g));
+    return commonGenres.length / Math.max(genres1.length, genres2.length);
+  }
+
+  /**
+   * Calculate mood similarity with predictions
+   */
+  calculateMoodSimilarityWithPredictions(song1, song2) {
+    const moods1 = song1.moods?.map(m => m.name) || this.predictMoodsFromMetadata(song1);
+    const moods2 = song2.moods?.map(m => m.name) || this.predictMoodsFromMetadata(song2);
+
+    if (moods1.length === 0 || moods2.length === 0) return 0;
+
+    const commonMoods = moods1.filter(m => moods2.includes(m));
+    return commonMoods.length / Math.max(moods1.length, moods2.length);
+  }
+
+  /**
+   * Calculate genre similarity
+   */
+  calculateGenreSimilarity(song1, song2) {
+    const genres1 = song1.genres.map(g => g.name);
+    const genres2 = song2.genres.map(g => g.name);
+
+    if (genres1.length === 0 || genres2.length === 0) return 0;
+
+    const commonGenres = genres1.filter(g => genres2.includes(g));
+    return commonGenres.length / Math.max(genres1.length, genres2.length);
+  }
+
+  /**
+   * Calculate mood similarity
+   */
+  calculateMoodSimilarity(song1, song2) {
+    const moods1 = song1.moods.map(m => m.name);
+    const moods2 = song2.moods.map(m => m.name);
+
+    if (moods1.length === 0 || moods2.length === 0) return 0;
+
+    const commonMoods = moods1.filter(m => moods2.includes(m));
+    return commonMoods.length / Math.max(moods1.length, moods2.length);
+  }
+
+  /**
+   * Predict genres from metadata when missing
+   */
+  predictGenresFromMetadata(song) {
+    // Simple heuristics based on artist and year
+    const predictions = [];
+    
+    if (song.artist.toLowerCase().includes('uzi')) {
+      predictions.push('Trap', 'Hip-Hop');
+    }
+    
+    if (song.year && song.year >= 2015) {
+      predictions.push('Rap');
+    }
+    
+    return predictions.length > 0 ? predictions : ['Unknown'];
+  }
+
+  /**
+   * Predict moods from metadata when missing
+   */
+  predictMoodsFromMetadata(song) {
+    // Simple heuristics based on available data
+    const predictions = [];
+    
+    if (song.energy && song.energy > 0.7) {
+      predictions.push('Energetic');
+    }
+    
+    if (song.valence && song.valence > 0.6) {
+      predictions.push('Happy');
+    }
+    
+    if (song.danceability && song.danceability > 0.7) {
+      predictions.push('Danceable');
+    }
+    
+    return predictions.length > 0 ? predictions : ['Neutral'];
   }
 
   /**
@@ -508,9 +729,10 @@ export class HybridRecommendationEngine {
    */
   async getRecommendations(userId, options = {}) {
     const {
-      collaborativeWeight = 0.4,
-      contentBasedWeight = 0.4,
-      popularityWeight = 0.2,
+      collaborativeWeight = 0.3,
+      contentBasedWeight = 0.3,
+      aiEnhancedWeight = 0.3,
+      popularityWeight = 0.1,
       limit = 20
     } = options;
 
@@ -518,10 +740,11 @@ export class HybridRecommendationEngine {
       console.log(`🎯 Generating hybrid recommendations for user ${userId}`);
 
       // Get recommendations from different approaches
-      const [collaborativeRecs, contentBasedRecs, popularSongs] = await Promise.all([
+      const [collaborativeRecs, contentBasedRecs, aiEnhancedRecs, popularSongs] = await Promise.all([
         this.collaborative.findSimilarItems(userId, limit),
         this.contentBased.getRecommendations(userId, limit),
-        this.contentBased.getPopularSongs(Math.ceil(limit * 0.3))
+        aiEnhancedEngine.getEnhancedRecommendations(userId, { limit }),
+        this.contentBased.getPopularSongs(Math.ceil(limit * 0.2))
       ]);
 
       // Combine and score recommendations
@@ -552,6 +775,24 @@ export class HybridRecommendationEngine {
             score,
             sources: ['content-based'],
             details: { reason: rec.reason }
+          });
+        }
+      }
+
+      // Add AI-enhanced results
+      for (const rec of aiEnhancedRecs) {
+        const score = rec.similarity * aiEnhancedWeight;
+        const existing = combinedRecs.get(rec.id);
+        
+        if (existing) {
+          existing.score += score;
+          existing.sources.push('ai-enhanced');
+        } else {
+          combinedRecs.set(rec.id, {
+            song: rec,
+            score,
+            sources: ['ai-enhanced'],
+            details: { basedOn: rec.basedOn }
           });
         }
       }

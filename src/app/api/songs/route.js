@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 
 export async function GET(request) {
   try {
+    const session = await getServerSession(authOptions);
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search') || '';
     const limit = parseInt(searchParams.get('limit')) || 20;
@@ -36,12 +39,24 @@ export async function GET(request) {
       orderBy: { avgRating: 'desc' }
     });
 
+    // Get user's liked songs if logged in
+    let likedSongIds = [];
+    if (session?.user) {
+      const likes = await prisma.userSongLike.findMany({
+        where: { userId: session.user.id },
+        select: { songId: true }
+      });
+      likedSongIds = likes.map(l => l.songId);
+    }
+
     // Transform the data to match frontend expectations
     const transformedSongs = songs.map(song => ({
       id: song.id,
       title: song.title,
       artist: song.artist,
       album: song.album,
+      imageUrl: song.imageUrl,
+      isLiked: likedSongIds.includes(song.id),
       year: song.year,
       spotifyUrl: song.spotifyId ? `https://open.spotify.com/track/${song.spotifyId}` : null,
       youtubeUrl: song.youtubeId ? `https://www.youtube.com/watch?v=${song.youtubeId}` : null,

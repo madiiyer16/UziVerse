@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { hybridEngine } from '@/lib/recommendation-engine';
+import { aiEnhancedEngine } from '@/lib/ai-prediction';
 
 /**
  * Get personalized recommendations for authenticated user

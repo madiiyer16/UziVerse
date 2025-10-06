@@ -225,21 +225,83 @@ async function syncSpotifyCatalog(forceUpdate = false, maxAge = 24 * 60 * 60 * 1
 }
 
 /**
- * Sync SoundCloud catalog (placeholder for future implementation)
+ * Sync SoundCloud catalog
  */
 async function syncSoundCloudCatalog(forceUpdate = false, maxAge = 24 * 60 * 60 * 1000) {
-  // This is a placeholder for SoundCloud integration
-  // Will be implemented when SoundCloud API is added
-  
-  console.log('🎧 SoundCloud sync not yet implemented');
-  
-  return {
-    songsProcessed: 0,
-    songsCreated: 0,
-    songsUpdated: 0,
-    songsSkipped: 0,
-    errors: [{ error: 'SoundCloud sync not yet implemented' }]
-  };
+  try {
+    const { soundcloudClient } = await import('@/lib/soundcloud');
+    
+    console.log('🎧 Starting SoundCloud catalog sync...');
+    
+    // Check if we need to sync (unless force update)
+    if (!forceUpdate) {
+      const { prisma } = await import('@/lib/prisma');
+      const lastSync = await prisma.song.findFirst({
+        where: { soundcloudId: { not: null } },
+        orderBy: { updatedAt: 'desc' },
+        select: { updatedAt: true }
+      });
+      
+      if (lastSync && (Date.now() - lastSync.updatedAt.getTime()) < maxAge) {
+        console.log('🎧 SoundCloud sync skipped - recent sync found');
+        return {
+          songsProcessed: 0,
+          songsCreated: 0,
+          songsUpdated: 0,
+          songsSkipped: 0,
+          errors: []
+        };
+      }
+    }
+    
+    // Fetch and sync tracks in batches
+    let totalCreated = 0;
+    let totalUpdated = 0;
+    let totalSkipped = 0;
+    let offset = 0;
+    const limit = 50;
+    let hasMore = true;
+    
+    while (hasMore) {
+      const soundcloudData = await soundcloudClient.getOfficialTracks(limit, offset);
+      
+      if (!soundcloudData.tracks || soundcloudData.tracks.length === 0) {
+        break;
+      }
+      
+      const syncResult = await soundcloudClient.syncWithDatabase(soundcloudData.tracks);
+      
+      totalCreated += syncResult.created;
+      totalUpdated += syncResult.updated;
+      totalSkipped += syncResult.skipped;
+      
+      hasMore = soundcloudData.hasMore;
+      offset = soundcloudData.offset;
+      
+      // Add a small delay to be respectful to SoundCloud API
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    
+    console.log(`🎧 SoundCloud sync complete: ${totalCreated} created, ${totalUpdated} updated, ${totalSkipped} skipped`);
+    
+    return {
+      songsProcessed: totalCreated + totalUpdated + totalSkipped,
+      songsCreated: totalCreated,
+      songsUpdated: totalUpdated,
+      songsSkipped: totalSkipped,
+      errors: []
+    };
+    
+  } catch (error) {
+    console.error('Error syncing SoundCloud catalog:', error);
+    return {
+      songsProcessed: 0,
+      songsCreated: 0,
+      songsUpdated: 0,
+      songsSkipped: 0,
+      errors: [{ error: error.message }]
+    };
+  }
 }
 
 /**
