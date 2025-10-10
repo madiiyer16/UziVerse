@@ -1,305 +1,247 @@
+// app/api/recommendations/personalized/route.js
 import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { hybridEngine } from '@/lib/recommendation-engine';
-import { aiEnhancedEngine } from '@/lib/ai-prediction';
 
-/**
- * Get personalized recommendations for authenticated user
- * GET /api/recommendations/personalized
- */
 export async function GET(request) {
   try {
-    // Check authentication
     const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+
+    if (!session?.user) {
       return NextResponse.json(
-        { success: false, error: 'Authentication required' },
+        { success: false, error: 'Unauthorized' },
         { status: 401 }
       );
     }
 
-    const { searchParams } = new URL(request.url);
-    const limit = parseInt(searchParams.get('limit')) || 20;
-    const algorithm = searchParams.get('algorithm') || 'hybrid';
-    const coldStart = searchParams.get('coldStart') === 'true';
-
-    console.log(`🎯 Getting personalized recommendations for user ${session.user.id}`);
-
-    let recommendations = [];
-
-    if (coldStart) {
-      // Handle cold start for new users
-      recommendations = await hybridEngine.getColdStartRecommendations(
-        session.user.id, 
-        limit
-      );
-    } else {
-      // Get hybrid recommendations
-      recommendations = await hybridEngine.getRecommendations(
-        session.user.id, 
-        { 
-          limit,
-          collaborativeWeight: algorithm === 'collaborative' ? 0.8 : 0.4,
-          contentBasedWeight: algorithm === 'content' ? 0.8 : 0.4,
-          popularityWeight: algorithm === 'popularity' ? 0.8 : 0.2
+    // Get user's liked songs with their genres, moods, and audio features
+    const likedSongs = await prisma.userSongLike.findMany({
+      where: { userId: session.user.id },
+      include: {
+        song: {
+          include: {
+            genres: {
+              include: {
+                genre: true
+              }
+            },
+            moods: {
+              include: {
+                mood: true
+              }
+            }
+          }
         }
-      );
+      }
+    });
+
+    if (likedSongs.length === 0) {
+      return NextResponse.json({
+        success: true,
+        recommendations: [],
+        data: { recommendations: [] },
+        message: 'No liked songs found. Start liking songs to get recommendations!'
+      });
     }
 
-    // Enhance recommendations with additional data
-    const enhancedRecommendations = recommendations.map(rec => ({
-      id: rec.id,
-      title: rec.title,
-      artist: rec.artist,
-      album: rec.album,
-      year: rec.year,
-      imageUrl: rec.imageUrl,
-      previewUrl: rec.previewUrl,
-      duration: rec.duration,
-      explicit: rec.explicit,
-      popularity: rec.popularity,
-      avgRating: rec.avgRating,
-      totalRatings: rec.totalRatings,
-      genres: rec.genres?.map(g => g.name) || [],
-      moods: rec.moods?.map(m => m.name) || [],
-      audioFeatures: rec.audioFeatures ? {
-        energy: rec.audioFeatures.energy,
-        danceability: rec.audioFeatures.danceability,
-        valence: rec.audioFeatures.valence,
-        tempo: rec.audioFeatures.tempo
-      } : null,
-      recommendationScore: rec.recommendationScore,
-      rank: rec.rank,
-      sources: rec.sources,
-      reason: rec.details?.reason || 'Personalized recommendation'
+    // Extract all genres and moods from liked songs
+    const likedGenres = new Set();
+    const likedMoods = new Set();
+    const audioFeatures = {
+      energy: [],
+      danceability: [],
+      valence: [],
+      tempo: []
+    };
+
+    likedSongs.forEach(like => {
+      const song = like.song;
+      
+      // Collect genres
+      song.genres.forEach(sg => likedGenres.add(sg.genre.name));
+      
+      // Collect moods
+      song.moods.forEach(sm => likedMoods.add(sm.mood.name));
+      
+      // Collect audio features
+      if (song.energy) audioFeatures.energy.push(song.energy);
+      if (song.danceability) audioFeatures.danceability.push(song.danceability);
+      if (song.valence) audioFeatures.valence.push(song.valence);
+      if (song.tempo) audioFeatures.tempo.push(song.tempo);
+    });
+
+    // Calculate average audio features
+    const avgFeatures = {
+      energy: audioFeatures.energy.length > 0 
+        ? audioFeatures.energy.reduce((a, b) => a + b, 0) / audioFeatures.energy.length 
+        : null,
+      danceability: audioFeatures.danceability.length > 0 
+        ? audioFeatures.danceability.reduce((a, b) => a + b, 0) / audioFeatures.danceability.length 
+        : null,
+      valence: audioFeatures.valence.length > 0 
+        ? audioFeatures.valence.reduce((a, b) => a + b, 0) / audioFeatures.valence.length 
+        : null,
+      tempo: audioFeatures.tempo.length > 0 
+        ? audioFeatures.tempo.reduce((a, b) => a + b, 0) / audioFeatures.tempo.length 
+        : null
+    };
+
+    // Get all songs that are NOT liked by the user
+    const likedSongIds = likedSongs.map(like => like.song.id);
+    
+    const candidateSongs = await prisma.song.findMany({
+      where: {
+        id: { notIn: likedSongIds },
+        // Ensure songs have some audio features
+        OR: [
+          { energy: { not: null, gt: 0 } },
+          { danceability: { not: null, gt: 0 } }
+        ]
+      },
+      include: {
+        genres: {
+          include: {
+            genre: true
+          }
+        },
+        moods: {
+          include: {
+            mood: true
+          }
+        },
+        reviews: {
+          include: {
+            user: true
+          }
+        },
+        ratings: true
+      }
+    });
+
+    // Score each candidate song
+    const scoredSongs = candidateSongs.map(song => {
+      let score = 0;
+      
+      // Get song's genres and moods
+      const songGenres = song.genres.map(sg => sg.genre.name);
+      const songMoods = song.moods.map(sm => sm.mood.name);
+      
+      // Genre matching (40% weight)
+      const genreMatches = songGenres.filter(g => likedGenres.has(g)).length;
+      if (songGenres.length > 0) {
+        score += (genreMatches / songGenres.length) * 0.4;
+      }
+      
+      // Mood matching (30% weight)
+      const moodMatches = songMoods.filter(m => likedMoods.has(m)).length;
+      if (songMoods.length > 0) {
+        score += (moodMatches / songMoods.length) * 0.3;
+      }
+      
+      // Audio feature similarity (30% weight)
+      let featureScore = 0;
+      let featureCount = 0;
+      
+      if (avgFeatures.energy && song.energy) {
+        featureScore += 1 - Math.abs(avgFeatures.energy - song.energy);
+        featureCount++;
+      }
+      if (avgFeatures.danceability && song.danceability) {
+        featureScore += 1 - Math.abs(avgFeatures.danceability - song.danceability);
+        featureCount++;
+      }
+      if (avgFeatures.valence && song.valence) {
+        featureScore += 1 - Math.abs(avgFeatures.valence - song.valence);
+        featureCount++;
+      }
+      if (avgFeatures.tempo && song.tempo) {
+        // Normalize tempo difference (typical range 60-180 BPM)
+        const tempoDiff = Math.abs(avgFeatures.tempo - song.tempo) / 120;
+        featureScore += Math.max(0, 1 - tempoDiff);
+        featureCount++;
+      }
+      
+      if (featureCount > 0) {
+        score += (featureScore / featureCount) * 0.3;
+      }
+
+      return {
+        song,
+        score,
+        genreMatches,
+        moodMatches
+      };
+    });
+
+    // Sort by score and take top 20
+    scoredSongs.sort((a, b) => b.score - a.score);
+    const topRecommendations = scoredSongs.slice(0, 20);
+
+    // Transform to match /api/songs format exactly
+    const recommendations = topRecommendations.map(({ song, score, genreMatches, moodMatches }) => ({
+      id: song.id,
+      title: song.title,
+      artist: song.artist,
+      album: song.album,
+      year: song.year,
+      imageUrl: song.imageUrl,
+      spotifyUrl: song.spotifyId ? `https://open.spotify.com/track/${song.spotifyId}` : null,
+      youtubeUrl: song.youtubeId ? `https://www.youtube.com/watch?v=${song.youtubeId}` : null,
+      soundcloudUrl: song.soundcloudId ? `https://soundcloud.com/track/${song.soundcloudId}` : null,
+      soundcloudId: song.soundcloudId,
+      
+      genre: song.genres.map(sg => sg.genre.name),
+      mood: song.moods.map(sm => sm.mood.name),
+      
+      audioFeatures: {
+        energy: song.energy,
+        danceability: song.danceability,
+        valence: song.valence,
+        tempo: song.tempo,
+        loudness: song.loudness,
+        speechiness: song.speechiness,
+        acousticness: song.acousticness,
+        instrumentalness: song.instrumentalness,
+        liveness: song.liveness
+      },
+      
+      avgRating: song.avgRating || 0,
+      totalRatings: song.totalRatings || 0,
+      isLiked: false, // Already filtered out liked songs
+      
+      // Recommendation metadata
+      recommendationScore: score,
+      matchReason: `${genreMatches} genre matches, ${moodMatches} mood matches`,
+      
+      reviews: song.reviews.map(review => ({
+        id: review.id,
+        username: review.user.username,
+        rating: song.ratings.find(r => r.userId === review.userId)?.rating || 0,
+        review: review.reviewText,
+        date: review.createdAt.toISOString().split('T')[0]
+      }))
     }));
 
     return NextResponse.json({
       success: true,
+      recommendations,
       data: {
-        recommendations: enhancedRecommendations,
-        total: enhancedRecommendations.length,
-        algorithm,
-        userId: session.user.id,
-        generatedAt: new Date().toISOString()
+        recommendations
+      },
+      userPreferences: {
+        genres: Array.from(likedGenres),
+        moods: Array.from(likedMoods),
+        avgAudioFeatures: avgFeatures,
+        totalLikedSongs: likedSongs.length
       }
     });
 
   } catch (error) {
-    console.error('Error getting personalized recommendations:', error);
+    console.error('Personalized Recommendations API Error:', error);
     return NextResponse.json(
-      { 
-        success: false, 
-        error: 'Failed to get personalized recommendations',
-        details: error.message 
-      },
+      { success: false, error: 'Failed to generate recommendations' },
       { status: 500 }
     );
   }
-}
-
-/**
- * Update user preferences based on feedback
- * POST /api/recommendations/personalized
- */
-export async function POST(request) {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { success: false, error: 'Authentication required' },
-        { status: 401 }
-      );
-    }
-
-    const body = await request.json();
-    const { 
-      songId, 
-      action, 
-      rating, 
-      timeSpent, 
-      skipTime 
-    } = body;
-
-    if (!songId || !action) {
-      return NextResponse.json(
-        { success: false, error: 'songId and action are required' },
-        { status: 400 }
-      );
-    }
-
-    console.log(`📊 Recording user feedback: ${action} for song ${songId}`);
-
-    const userId = session.user.id;
-
-    // Handle different types of user feedback
-    switch (action) {
-      case 'play':
-        await recordPlay(userId, songId, timeSpent);
-        break;
-        
-      case 'like':
-        await recordLike(userId, songId);
-        break;
-        
-      case 'dislike':
-        await recordDislike(userId, songId);
-        break;
-        
-      case 'rate':
-        if (!rating || rating < 1 || rating > 5) {
-          return NextResponse.json(
-            { success: false, error: 'Rating must be between 1 and 5' },
-            { status: 400 }
-          );
-        }
-        await recordRating(userId, songId, rating);
-        break;
-        
-      case 'skip':
-        await recordSkip(userId, songId, skipTime);
-        break;
-        
-      default:
-        return NextResponse.json(
-          { success: false, error: 'Invalid action' },
-          { status: 400 }
-        );
-    }
-
-    return NextResponse.json({
-      success: true,
-      message: 'User feedback recorded successfully',
-      data: { userId, songId, action, timestamp: new Date().toISOString() }
-    });
-
-  } catch (error) {
-    console.error('Error recording user feedback:', error);
-    return NextResponse.json(
-      { 
-        success: false, 
-        error: 'Failed to record user feedback',
-        details: error.message 
-      },
-      { status: 500 }
-    );
-  }
-}
-
-/**
- * Record song play interaction
- */
-async function recordPlay(userId, songId, timeSpent = 0) {
-  const { prisma } = await import('@/lib/prisma');
-  
-  const interaction = await prisma.userSongInteraction.upsert({
-    where: { userId_songId: { userId, songId } },
-    update: {
-      playCount: { increment: 1 },
-      lastPlayed: new Date(),
-      totalTime: { increment: Math.round(timeSpent || 0) }
-    },
-    create: {
-      userId,
-      songId,
-      playCount: 1,
-      lastPlayed: new Date(),
-      totalTime: Math.round(timeSpent || 0)
-    }
-  });
-
-  // Update song's total play count
-  await prisma.song.update({
-    where: { id: songId },
-    data: { totalPlays: { increment: 1 } }
-  });
-
-  return interaction;
-}
-
-/**
- * Record song like
- */
-async function recordLike(userId, songId) {
-  const { prisma } = await import('@/lib/prisma');
-  
-  const like = await prisma.userSongLike.upsert({
-    where: { userId_songId: { userId, songId } },
-    update: {},
-    create: { userId, songId }
-  });
-
-  // Update song's total likes
-  await prisma.song.update({
-    where: { id: songId },
-    data: { totalLikes: { increment: 1 } }
-  });
-
-  return like;
-}
-
-/**
- * Record song dislike (negative feedback)
- */
-async function recordDislike(userId, songId) {
-  // For now, we'll just remove any existing likes
-  // In a more sophisticated system, you might have a separate dislikes table
-  const { prisma } = await import('@/lib/prisma');
-  
-  const deletedLike = await prisma.userSongLike.deleteMany({
-    where: { userId, songId }
-  });
-
-  // Update song's total likes
-  if (deletedLike.count > 0) {
-    await prisma.song.update({
-      where: { id: songId },
-      data: { totalLikes: { decrement: deletedLike.count } }
-    });
-  }
-
-  return deletedLike;
-}
-
-/**
- * Record song rating
- */
-async function recordRating(userId, songId, rating) {
-  const { prisma } = await import('@/lib/prisma');
-  
-  // Get existing rating to update song averages
-  const existingRating = await prisma.rating.findUnique({
-    where: { userId_songId: { userId, songId } }
-  });
-
-  const newRating = await prisma.rating.upsert({
-    where: { userId_songId: { userId, songId } },
-    update: { rating },
-    create: { userId, songId, rating }
-  });
-
-  // Update song's average rating and total ratings
-  const allRatings = await prisma.rating.findMany({
-    where: { songId },
-    select: { rating: true }
-  });
-
-  const avgRating = allRatings.reduce((sum, r) => sum + r.rating, 0) / allRatings.length;
-  const totalRatings = allRatings.length;
-
-  await prisma.song.update({
-    where: { id: songId },
-    data: { avgRating, totalRatings }
-  });
-
-  return newRating;
-}
-
-/**
- * Record song skip
- */
-async function recordSkip(userId, songId, skipTime = 0) {
-  // Record as a play but with low time spent (indicating skip)
-  return recordPlay(userId, songId, Math.min(skipTime || 5, 30)); // Max 30 seconds for skip
 }
