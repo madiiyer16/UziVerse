@@ -1,53 +1,75 @@
+// app/api/songs/route.js
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { PrismaClient } from '@prisma/client';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+
+const prisma = new PrismaClient();
 
 export async function GET(request) {
   try {
     const session = await getServerSession(authOptions);
     const { searchParams } = new URL(request.url);
+    
     const search = searchParams.get('search') || '';
     const limit = parseInt(searchParams.get('limit')) || 20;
     const offset = parseInt(searchParams.get('offset')) || 0;
 
-    // Get total count for pagination
-    const totalSongs = await prisma.song.count({
-      where: {
-        OR: [
-          { title: { contains: search, mode: 'insensitive' } },
-          { album: { contains: search, mode: 'insensitive' } }
-        ]
+    // Build where clause
+    const whereClause = search ? {
+      OR: [
+        { title: { contains: search, mode: 'insensitive' } },
+        { album: { contains: search, mode: 'insensitive' } },
+        { artist: { contains: search, mode: 'insensitive' } }
+      ]
+    } : {};
+
+    // Fetch songs with genres, moods, and likes
+    const songs = await prisma.song.findMany({
+      where: whereClause,
+      take: limit,
+      skip: offset,
+      include: {
+        genres: {
+          include: {
+            genre: true
+          }
+        },
+        moods: {
+          include: {
+            mood: true
+          }
+        },
+        likes: session?.user?.id ? {
+          where: {
+            userId: session.user.id
+          }
+        } : false,
+        ratings: {
+          select: {
+            rating: true
+          }
+        },
+        reviews: {
+          include: {
+            user: {
+              select: {
+                username: true
+              }
+            }
+          },
+          orderBy: {
+            createdAt: 'desc'
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
       }
     });
 
-    const songs = await prisma.song.findMany({
-      where: {
-        OR: [
-          { title: { contains: search, mode: 'insensitive' } },
-          { album: { contains: search, mode: 'insensitive' } }
-        ]
-      },
-      include: {
-        genres: { include: { genre: true } },
-        moods: { include: { mood: true } },
-        reviews: { include: { user: true } },
-        ratings: true
-      },
-      skip: offset,
-      take: limit,
-      orderBy: { avgRating: 'desc' }
-    });
-
-    // Get user's liked songs if logged in
-    let likedSongIds = [];
-    if (session?.user) {
-      const likes = await prisma.userSongLike.findMany({
-        where: { userId: session.user.id },
-        select: { songId: true }
-      });
-      likedSongIds = likes.map(l => l.songId);
-    }
+    // Get total count for pagination
+    const totalCount = await prisma.song.count({ where: whereClause });
 
     // Transform the data to match frontend expectations
     const transformedSongs = songs.map(song => ({
@@ -55,51 +77,75 @@ export async function GET(request) {
       title: song.title,
       artist: song.artist,
       album: song.album,
-      imageUrl: song.imageUrl,
-      isLiked: likedSongIds.includes(song.id),
       year: song.year,
-      spotifyUrl: song.spotifyId ? `https://open.spotify.com/track/${song.spotifyId}` : null,
-      youtubeUrl: song.youtubeId ? `https://www.youtube.com/watch?v=${song.youtubeId}` : null,
-      soundcloudUrl: song.soundcloudId ? `https://soundcloud.com/track/${song.soundcloudId}` : null,
-      avgRating: song.avgRating,
-      totalRatings: song.totalRatings,
-      genre: song.genres.map(g => g.genre.name),
-      mood: song.moods.map(m => m.mood.name),
+      imageUrl: song.imageUrl,
+      spotifyUrl: song.spotifyUrl,
+      youtubeUrl: song.youtubeUrl,
+      duration: song.duration,
+      
+      // Extract genre names from the relationship
+      genre: song.genres?.map(sg => sg.genre.name) || [],
+      
+      // Extract mood names from the relationship
+      mood: song.moods?.map(sm => sm.mood.name) || [],
+      
+      // Audio features - make sure they're included
       audioFeatures: {
-        energy: song.energy,
-        danceability: song.danceability,
-        valence: song.valence,
-        tempo: song.tempo,
-        acousticness: song.acousticness,
-        instrumentalness: song.instrumentalness,
-        liveness: song.liveness,
-        speechiness: song.speechiness
+        energy: song.energy || 0,
+        danceability: song.danceability || 0,
+        valence: song.valence || 0,
+        tempo: song.tempo || 0,
+        loudness: song.loudness || 0,
+        speechiness: song.speechiness || 0,
+        acousticness: song.acousticness || 0,
+        instrumentalness: song.instrumentalness || 0,
+        liveness: song.liveness || 0
       },
-      reviews: song.reviews.map(review => ({
+      
+      // Also add them at root level for backwards compatibility
+      energy: song.energy || 0,
+      danceability: song.danceability || 0,
+      valence: song.valence || 0,
+      tempo: song.tempo || 0,
+      
+      // Ratings - calculate from Rating model if avgRating is not set
+      avgRating: song.avgRating || (song.ratings?.length > 0 
+        ? song.ratings.reduce((sum, r) => sum + r.rating, 0) / song.ratings.length 
+        : 0),
+      totalRatings: song.totalRatings || song.ratings?.length || 0,
+      
+      // Like status for current user
+      isLiked: session?.user?.id ? (song.likes?.length > 0) : false,
+      
+      // Reviews
+      reviews: song.reviews?.map(review => ({
         id: review.id,
-        username: review.user.username,
-        rating: song.ratings.find(r => r.userId === review.userId)?.rating || 0,
+        username: review.user?.username || 'Anonymous',
+        rating: review.rating,
         review: review.reviewText,
-        date: review.createdAt.toISOString().split('T')[0]
-      }))
+        comment: review.reviewText,
+        date: review.createdAt ? new Date(review.createdAt).toLocaleDateString() : ''
+      })) || []
     }));
 
     return NextResponse.json({
       success: true,
       songs: transformedSongs,
       pagination: {
-        total: totalSongs,
+        total: totalCount,
         limit,
         offset,
-        hasMore: offset + limit < totalSongs
+        hasMore: offset + limit < totalCount
       }
     });
 
   } catch (error) {
-    console.error('Songs API Error:', error);
+    console.error('Error fetching songs:', error);
     return NextResponse.json(
       { success: false, error: 'Failed to fetch songs' },
       { status: 500 }
     );
+  } finally {
+    await prisma.$disconnect();
   }
 }

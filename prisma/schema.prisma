@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,111 +8,81 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  username  String   @unique
-  email     String   @unique
-  avatarUrl String?
-  bio       String?
-  isVerified Boolean @default(false)
-  role      UserRole @default(USER)
-  
-  // Authentication
+  id             String                @id @default(cuid())
+  username       String                @unique
+  email          String                @unique
+  avatarUrl      String?
+  bio            String?
+  isVerified     Boolean               @default(false)
+  role           UserRole              @default(USER)
   hashedPassword String?
   emailVerified  DateTime?
-  
-  // Profile stats (denormalized for performance)
-  reviewCount   Int @default(0)
-  avgRating     Float @default(0)
-  followersCount Int @default(0)
-  followingCount Int @default(0)
-  
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  reviewCount    Int                   @default(0)
+  avgRating      Float                 @default(0)
+  followersCount Int                   @default(0)
+  followingCount Int                   @default(0)
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  following      Follow[]              @relation("UserFollowing")
+  followers      Follow[]              @relation("UserFollowers")
+  playlists      Playlist[]
+  ratings        Rating[]
+  reviews        Review[]
+  interactions   UserSongInteraction[]
+  likes          UserSongLike[]
 
-  // Relations
-  reviews     Review[]
-  ratings     Rating[]
-  interactions UserSongInteraction[]
-  likes       UserSongLike[]
-  playlists   Playlist[]
-  followers   Follow[] @relation("UserFollowers")
-  following   Follow[] @relation("UserFollowing")
-
-  // Indexes for performance
   @@index([username])
   @@index([email])
   @@index([createdAt])
   @@map("users")
 }
 
-enum UserRole {
-  USER
-  MODERATOR
-  ADMIN
-}
-
 model Song {
-  id          String  @id @default(cuid())
-  title       String
-  artist      String  @default("Lil Uzi Vert")
-  album       String?
-  year        Int?
-  
-  // External IDs for different platforms
-  spotifyId   String? @unique
-  soundcloudId String? @unique
-  youtubeId   String?
-  appleMusicId String?
-
-  
-  // Media
-  imageUrl    String?
-  previewUrl  String? // 30-second preview
-  duration    Int?    // in seconds
-  
-  // Platform-specific data
-  popularity     Int?    // Spotify popularity score
-  soundcloudPlays Int?  // SoundCloud play count
-  youtubeViews   Int?   // YouTube view count
-  
-  explicit       Boolean @default(false)
-  isOfficial     Boolean @default(true) // vs unofficial/leaked
-  releaseType    ReleaseType @default(ALBUM) // Album, Single, EP, Mixtape, etc.
-  
-  // Audio Features (from Spotify API)
-  energy        Float?
-  danceability  Float?
-  valence       Float?
-  tempo         Float?
-  acousticness  Float?
+  id               String                @id @default(cuid())
+  title            String
+  artist           String                @default("Lil Uzi Vert")
+  album            String?
+  year             Int?
+  spotifyId        String?               @unique
+  soundcloudId     String?               @unique
+  youtubeId        String?
+  appleMusicId     String?
+  imageUrl         String?
+  previewUrl       String?
+  duration         Int?
+  popularity       Int?
+  soundcloudPlays  Int?
+  youtubeViews     Int?
+  explicit         Boolean               @default(false)
+  isOfficial       Boolean               @default(true)
+  releaseType      ReleaseType           @default(ALBUM)
+  energy           Float?
+  danceability     Float?
+  valence          Float?
+  tempo            Float?
+  acousticness     Float?
   instrumentalness Float?
-  liveness      Float?
-  speechiness   Float?
-  loudness      Float?
-  mode          Int?    // 0 = minor, 1 = major
-  key           Int?    // 0-11 representing C, C#, D, etc.
-  timeSignature Int?
-  
-  // Computed fields (denormalized for performance)
-  avgRating     Float   @default(0)
-  totalRatings  Int     @default(0)
-  totalPlays    Int     @default(0)
-  totalLikes    Int     @default(0)
-  
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  liveness         Float?
+  speechiness      Float?
+  loudness         Float?
+  mode             Int?
+  key              Int?
+  timeSignature    Int?
+  avgRating        Float                 @default(0)
+  totalRatings     Int                   @default(0)
+  totalPlays       Int                   @default(0)
+  totalLikes       Int                   @default(0)
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  playlistSongs    PlaylistSong[]
+  ratings          Rating[]
+  reviews          Review[]
+  genres           SongGenre[]
+  moods            SongMood[]
+  tags             SongTag[]
+  interactions     UserSongInteraction[]
+  likes            UserSongLike[]
 
-  // Relations
-  genres      SongGenre[]
-  moods       SongMood[]
-  tags        SongTag[]
-  reviews     Review[]
-  ratings     Rating[]
-  interactions UserSongInteraction[]
-  likes       UserSongLike[]
-  playlistSongs PlaylistSong[]
-
-  // Indexes for performance at scale
   @@index([title])
   @@index([artist])
   @@index([album])
@@ -130,56 +97,45 @@ model Song {
   @@map("songs")
 }
 
-enum ReleaseType {
-  ALBUM
-  SINGLE
-  EP
-  MIXTAPE
-  COMPILATION
-  LEAKED
-  UNRELEASED
-}
-
 model Genre {
-  id    String @id @default(cuid())
-  name  String @unique
-  slug  String @unique // URL-friendly version
+  id          String      @id @default(cuid())
+  name        String      @unique
+  slug        String      @unique
   description String?
-  color String? // Hex color for UI
-  songs SongGenre[]
+  color       String?
+  songs       SongGenre[]
 
   @@index([slug])
   @@map("genres")
 }
 
 model Mood {
-  id    String @id @default(cuid())
-  name  String @unique
-  slug  String @unique // URL-friendly version
+  id          String     @id @default(cuid())
+  name        String     @unique
+  slug        String     @unique
   description String?
-  color String? // Hex color for UI
-  songs SongMood[]
+  color       String?
+  songs       SongMood[]
 
   @@index([slug])
   @@map("moods")
 }
 
 model Tag {
-  id   String @id @default(cuid())
-  name String @unique
-  slug String @unique
+  id    String    @id @default(cuid())
+  name  String    @unique
+  slug  String    @unique
   songs SongTag[]
 
   @@index([slug])
   @@map("tags")
 }
 
-// Many-to-many relationship tables
 model SongGenre {
   songId  String
   genreId String
-  song    Song   @relation(fields: [songId], references: [id], onDelete: Cascade)
   genre   Genre  @relation(fields: [genreId], references: [id], onDelete: Cascade)
+  song    Song   @relation(fields: [songId], references: [id], onDelete: Cascade)
 
   @@id([songId, genreId])
   @@map("song_genres")
@@ -188,8 +144,8 @@ model SongGenre {
 model SongMood {
   songId String
   moodId String
-  song   Song   @relation(fields: [songId], references: [id], onDelete: Cascade)
   mood   Mood   @relation(fields: [moodId], references: [id], onDelete: Cascade)
+  song   Song   @relation(fields: [songId], references: [id], onDelete: Cascade)
 
   @@id([songId, moodId])
   @@map("song_moods")
@@ -198,27 +154,25 @@ model SongMood {
 model SongTag {
   songId String
   tagId  String
-  song   Song @relation(fields: [songId], references: [id], onDelete: Cascade)
-  tag    Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  song   Song   @relation(fields: [songId], references: [id], onDelete: Cascade)
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
   @@id([songId, tagId])
   @@map("song_tags")
 }
 
 model Review {
-  id         String   @id @default(cuid())
-  userId     String
-  songId     String
-  reviewText String
-  helpfulCount Int @default(0) // Like/helpful votes
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id           String   @id @default(cuid())
+  userId       String
+  songId       String
+  reviewText   String
+  helpfulCount Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  song         Song     @relation(fields: [songId], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  song Song @relation(fields: [songId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, songId]) // One review per user per song
+  @@unique([userId, songId])
   @@index([songId])
   @@index([userId])
   @@index([createdAt])
@@ -230,15 +184,13 @@ model Rating {
   id        String   @id @default(cuid())
   userId    String
   songId    String
-  rating    Int      // 1-5 stars
+  rating    Int
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  song      Song     @relation(fields: [songId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  song Song @relation(fields: [songId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, songId]) // One rating per user per song
+  @@unique([userId, songId])
   @@index([songId])
   @@index([userId])
   @@index([rating])
@@ -251,13 +203,11 @@ model UserSongInteraction {
   songId     String
   playCount  Int       @default(0)
   lastPlayed DateTime?
-  totalTime  Int       @default(0) // Total seconds listened
+  totalTime  Int       @default(0)
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
-
-  // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  song Song @relation(fields: [songId], references: [id], onDelete: Cascade)
+  song       Song      @relation(fields: [songId], references: [id], onDelete: Cascade)
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, songId])
   @@index([userId])
@@ -272,10 +222,8 @@ model UserSongLike {
   userId    String
   songId    String
   createdAt DateTime @default(now())
-
-  // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  song Song @relation(fields: [songId], references: [id], onDelete: Cascade)
+  song      Song     @relation(fields: [songId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, songId])
   @@index([userId])
@@ -285,23 +233,18 @@ model UserSongLike {
 }
 
 model Playlist {
-  id          String   @id @default(cuid())
-  name        String
-  description String?
-  isPublic    Boolean  @default(false)
-  userId      String
-  imageUrl    String?
-  
-  // Computed fields
-  songCount   Int      @default(0)
-  totalDuration Int    @default(0) // in seconds
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Relations
-  user  User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  songs PlaylistSong[]
+  id            String         @id @default(cuid())
+  name          String
+  description   String?
+  isPublic      Boolean        @default(false)
+  userId        String
+  imageUrl      String?
+  songCount     Int            @default(0)
+  totalDuration Int            @default(0)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  songs         PlaylistSong[]
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([isPublic])
@@ -313,12 +256,10 @@ model PlaylistSong {
   id         String   @id @default(cuid())
   playlistId String
   songId     String
-  position   Int      // Order in playlist
+  position   Int
   addedAt    DateTime @default(now())
-
-  // Relations
-  playlist Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
-  song     Song     @relation(fields: [songId], references: [id], onDelete: Cascade)
+  playlist   Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  song       Song     @relation(fields: [songId], references: [id], onDelete: Cascade)
 
   @@unique([playlistId, songId])
   @@unique([playlistId, position])
@@ -332,10 +273,8 @@ model Follow {
   followerId  String
   followingId String
   createdAt   DateTime @default(now())
-
-  // Relations
-  follower  User @relation("UserFollowing", fields: [followerId], references: [id], onDelete: Cascade)
-  following User @relation("UserFollowers", fields: [followingId], references: [id], onDelete: Cascade)
+  follower    User     @relation("UserFollowing", fields: [followerId], references: [id], onDelete: Cascade)
+  following   User     @relation("UserFollowers", fields: [followingId], references: [id], onDelete: Cascade)
 
   @@unique([followerId, followingId])
   @@index([followerId])
@@ -343,3 +282,18 @@ model Follow {
   @@map("follows")
 }
 
+enum UserRole {
+  USER
+  MODERATOR
+  ADMIN
+}
+
+enum ReleaseType {
+  ALBUM
+  SINGLE
+  EP
+  MIXTAPE
+  COMPILATION
+  LEAKED
+  UNRELEASED
+}
