@@ -1,36 +1,100 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# UziVerse
+
+A full-stack music platform for Lil Uzi Vert's discography. Browse albums and tracks, get personalized recommendations, rate and review songs, and build playlists — all backed by live Spotify data.
+
+**Live:** [uzi-recommender-full-stack.vercel.app](https://uzi-recommender-full-stack.vercel.app)
+
+## Features
+
+- **Discography browser** — albums, tracks, and Spotify-style track listings
+- **Personalized recommendations** — based on listening history and ratings
+- **For You feed** — AI-enhanced song suggestions
+- **Ratings & reviews** — rate songs and read community reviews
+- **Liked songs** — save tracks across sessions
+- **Playlists** — create and manage personal playlists
+- **Spotify sync** — pull live track data, audio features, and metadata via the Spotify API
+- **Auth** — sign up / sign in with email + password (NextAuth)
+
+## Tech Stack
+
+| Layer | Tool |
+|---|---|
+| Framework | Next.js 14 (App Router) |
+| Database | PostgreSQL via [Neon](https://neon.tech) |
+| ORM | Prisma |
+| Auth | NextAuth v4 |
+| Styling | Tailwind CSS |
+| Music data | Spotify Web API |
+| Deployment | Vercel |
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Node.js 18+
+- A [Neon](https://neon.tech) database
+- A [Spotify Developer](https://developer.spotify.com/dashboard) app
+
+### Setup
+
+1. Clone the repo and install dependencies:
+   ```bash
+   git clone https://github.com/madiiyer16/UziVerse.git
+   cd UziVerse
+   npm install
+   ```
+
+2. Copy the example env file and fill in your values:
+   ```bash
+   cp .env.example .env
+   ```
+
+   | Variable | Description |
+   |---|---|
+   | `DATABASE_URL` | Neon PostgreSQL connection string |
+   | `NEXTAUTH_SECRET` | Random secret for session signing |
+   | `NEXTAUTH_URL` | `http://localhost:3000` for local dev |
+   | `SPOTIFY_CLIENT_ID` | From Spotify Developer Dashboard |
+   | `SPOTIFY_CLIENT_SECRET` | From Spotify Developer Dashboard |
+
+3. Push the schema and seed the database:
+   ```bash
+   npm run db:push
+   npm run db:seed
+   ```
+
+4. Start the dev server:
+   ```bash
+   npm run dev
+   ```
+
+Open [http://localhost:3000](http://localhost:3000).
+
+## Scripts
+
+| Command | Description |
+|---|---|
+| `npm run dev` | Start dev server |
+| `npm run build` | Production build |
+| `npm run db:push` | Sync Prisma schema to database |
+| `npm run db:seed` | Seed genres, moods, and songs |
+| `npm run db:studio` | Open Prisma Studio |
+| `npm run sync:spotify` | Pull latest track data from Spotify |
+
+## Deployment
+
+The project is deployed on Vercel with Neon as the database. Environment variables are set in the Vercel dashboard. The build script runs `prisma generate` automatically before `next build`.
+
+To deploy your own instance:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm i -g vercel
+vercel --prod
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Add the same environment variables from the table above in your Vercel project settings. Set `NEXTAUTH_URL` to your production domain.
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+For Spotify OAuth to work in production, add your Vercel domain to the **Redirect URIs** in the Spotify Developer Dashboard:
+```
+https://your-app.vercel.app/api/auth/callback/spotify
+```
