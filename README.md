@@ -1,5 +1,6 @@
 # UziVerse 🎵
 
+<<<<<<< HEAD
 An AI-powered Lil Uzi Vert song recommender and review platform. Browse his complete discography of 290+ songs, get personalized song recommendations based on audio features, and discover new tracks through a clean, responsive web interface.
 
 🔗 **Live Demo:** https://uzi-recommender-full-stack.vercel.app/
@@ -7,6 +8,13 @@ An AI-powered Lil Uzi Vert song recommender and review platform. Browse his comp
 > **Note:** Spotify login is currently in developer mode. To try the full experience, [watch the demo video](#demo) or request access via the contact info below.
 
 ---
+=======
+> A full-stack music platform dedicated to Lil Uzi Vert's entire discography — browse albums, rate tracks, get personalized recommendations, and build playlists, all backed by live Spotify data.
+
+[![Live](https://img.shields.io/badge/Live-uzi--recommender.vercel.app-black?style=for-the-badge&logo=vercel)](https://uzi-recommender-full-stack.vercel.app)
+
+**[→ Open the app](https://uzi-recommender-full-stack.vercel.app)** — no account required to browse
+>>>>>>> 8970a59 (Make live URL prominent in README)
 
 ## Features
 
