@@ -29,6 +29,31 @@ export function cosineSimilarity(features1, features2) {
 }
 
 /**
+ * Extract an audio feature object from a song, handling both Prisma flat fields
+ * and the nested .audioFeatures shape produced by the AI-enhanced engine.
+ * All flat-vs-nested bridging goes through this one function.
+ */
+export function songToFeatureVector(song) {
+  if (song.audioFeatures && typeof song.audioFeatures === 'object') {
+    return song.audioFeatures;
+  }
+  return {
+    energy: song.energy,
+    danceability: song.danceability,
+    valence: song.valence,
+    tempo: song.tempo,
+    acousticness: song.acousticness,
+    instrumentalness: song.instrumentalness,
+    liveness: song.liveness,
+    speechiness: song.speechiness,
+    loudness: song.loudness,
+    mode: song.mode,
+    key: song.key,
+    timeSignature: song.timeSignature
+  };
+}
+
+/**
  * Calculate Euclidean distance between two audio feature vectors
  */
 export function euclideanDistance(features1, features2) {
@@ -204,15 +229,19 @@ export function kMeansClustering(songs, k, maxIterations = 100) {
  * Find similar songs based on audio features
  */
 export function findSimilarSongs(targetSong, allSongs, limit = 10) {
-  if (!targetSong.audioFeatures) return [];
+  const targetRaw = songToFeatureVector(targetSong);
+  if (!targetRaw || Object.values(targetRaw).every(v => v == null)) return [];
 
-  const targetFeatures = normalizeFeatures(targetSong.audioFeatures);
+  const targetFeatures = normalizeFeatures(targetRaw);
   const similarities = [];
 
   for (const song of allSongs) {
-    if (song.id === targetSong.id || !song.audioFeatures) continue;
+    if (song.id === targetSong.id) continue;
 
-    const songFeatures = normalizeFeatures(song.audioFeatures);
+    const songRaw = songToFeatureVector(song);
+    if (!songRaw) continue;
+
+    const songFeatures = normalizeFeatures(songRaw);
     const similarity = cosineSimilarity(targetFeatures, songFeatures);
     
     similarities.push({
@@ -333,10 +362,12 @@ export function calculateAdvancedSimilarity(song1, song2, weights = {}) {
   let totalScore = 0;
 
   // Audio features similarity
-  if (song1.audioFeatures && song2.audioFeatures) {
+  const features1 = songToFeatureVector(song1);
+  const features2 = songToFeatureVector(song2);
+  if (features1 && features2) {
     const audioScore = cosineSimilarity(
-      normalizeFeatures(song1.audioFeatures),
-      normalizeFeatures(song2.audioFeatures)
+      normalizeFeatures(features1),
+      normalizeFeatures(features2)
     );
     totalScore += audioScore * finalWeights.audioFeatures;
   }
