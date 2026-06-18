@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { aiEnhancedEngine } from '@/lib/ai-prediction';
+import { hybridEngine } from '@/lib/recommendation-engine';
 import { prisma } from '@/lib/prisma';
 
 /**
@@ -23,13 +23,17 @@ export async function GET(request) {
     const limit = parseInt(searchParams.get('limit')) || 20;
     const includePredictions = searchParams.get('includePredictions') === 'true';
 
-    console.log(`🤖 Getting AI-enhanced recommendations for user ${session.user.id}`);
+    console.log(`🤖 Getting hybrid recommendations for user ${session.user.id}`);
 
-    // Get AI-enhanced recommendations
-    const recommendations = await aiEnhancedEngine.getEnhancedRecommendations(
-      session.user.id, 
-      { limit }
+    // Run the full hybrid engine (CF item-based + content-based + AI-enhanced + popularity).
+    // getColdStartRecommendations handles the no-data case: falls back to popular songs.
+    const recommendations = await hybridEngine.getColdStartRecommendations(
+      session.user.id,
+      limit
     );
+    const isColdStart = recommendations.length > 0 && recommendations[0].sources?.includes('cold-start');
+    const algorithm = isColdStart ? 'cold-start-popular' : 'hybrid-cf';
+    console.log(`[ai-enhanced] algorithm=${algorithm}, results=${recommendations.length}`);
 
     // Enhance recommendations with additional data
     const enhancedRecommendations = recommendations.map(rec => ({
@@ -42,8 +46,9 @@ export async function GET(request) {
       spotifyUrl: rec.spotifyUrl,
       youtubeUrl: rec.youtubeUrl,
       soundcloudId: rec.soundcloudId,
-      recommendationScore: rec.similarity,
-      basedOn: rec.basedOn,
+      recommendationScore: rec.recommendationScore ?? rec.similarity ?? 0,
+      basedOn: rec.details?.basedOn || rec.details?.reason || null,
+      sources: rec.sources || [],
       
       // Audio features (with AI predictions if missing)
       audioFeatures: {
@@ -71,9 +76,9 @@ export async function GET(request) {
       totalPlays: rec.totalPlays || 0,
 
       // AI prediction indicators
-      hasPredictedFeatures: includePredictions ? this.hasPredictedFeatures(rec) : false,
-      hasPredictedGenres: includePredictions ? this.hasPredictedGenres(rec) : false,
-      hasPredictedMoods: includePredictions ? this.hasPredictedMoods(rec) : false
+      hasPredictedFeatures: includePredictions ? hasPredictedFeatures(rec) : false,
+      hasPredictedGenres: includePredictions ? hasPredictedGenres(rec) : false,
+      hasPredictedMoods: includePredictions ? hasPredictedMoods(rec) : false
     }));
 
     // Get user's liked songs count for context
@@ -82,7 +87,7 @@ export async function GET(request) {
     });
 
     // Get top genres from user's liked songs
-    const topGenres = await this.getUserTopGenres(session.user.id);
+    const topGenres = await getUserTopGenres(session.user.id);
 
     return NextResponse.json({
       success: true,
@@ -90,13 +95,15 @@ export async function GET(request) {
       basedOn: {
         likedCount,
         topGenres,
-        algorithm: 'ai-enhanced',
-        description: 'AI-powered recommendations with intelligent data completion'
+        algorithm,
+        description: algorithm === 'cold-start-popular'
+          ? 'No interaction data yet — showing popular songs as fallback'
+          : 'Hybrid CF + content-based + AI-enhanced recommendations'
       },
       metadata: {
         totalRecommendations: enhancedRecommendations.length,
         aiPredictionsUsed: enhancedRecommendations.filter(r => r.hasPredictedFeatures || r.hasPredictedGenres || r.hasPredictedMoods).length,
-        averageConfidence: this.calculateAverageConfidence(enhancedRecommendations)
+        averageConfidence: calculateAverageConfidence(enhancedRecommendations)
       }
     });
 
