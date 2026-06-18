@@ -4,12 +4,13 @@
  */
 
 import { prisma } from './prisma';
-import { 
-  cosineSimilarity, 
-  euclideanDistance, 
+import {
+  cosineSimilarity,
+  euclideanDistance,
   normalizeFeatures,
   findSimilarSongs,
-  calculateAdvancedSimilarity 
+  calculateAdvancedSimilarity,
+  songToFeatureVector
 } from './audio-analysis';
 import { aiEnhancedEngine } from './ai-prediction';
 
@@ -221,12 +222,12 @@ export class CollaborativeFiltering {
 
     // Process ratings
     for (const rating of ratings) {
-      const weight = rating.rating / 5; // Normalize rating to 0-1
+      const weight = rating.rating / 5;
       profile.totalWeight += weight;
-      
-      // Aggregate audio features
-      if (rating.song.audioFeatures) {
-        for (const [key, value] of Object.entries(rating.song.audioFeatures)) {
+
+      const features = songToFeatureVector(rating.song);
+      if (features) {
+        for (const [key, value] of Object.entries(features)) {
           if (profile.audioFeatures[key] !== undefined && value !== null) {
             profile.audioFeatures[key] += value * weight;
           }
@@ -236,11 +237,12 @@ export class CollaborativeFiltering {
 
     // Process interactions
     for (const interaction of interactions) {
-      const weight = Math.min(interaction.playCount / 10, 1); // Play count weight
+      const weight = Math.min(interaction.playCount / 10, 1);
       profile.totalWeight += weight;
-      
-      if (interaction.song.audioFeatures) {
-        for (const [key, value] of Object.entries(interaction.song.audioFeatures)) {
+
+      const features = songToFeatureVector(interaction.song);
+      if (features) {
+        for (const [key, value] of Object.entries(features)) {
           if (profile.audioFeatures[key] !== undefined && value !== null) {
             profile.audioFeatures[key] += value * weight;
           }
