@@ -25,23 +25,19 @@ export class CollaborativeFiltering {
    */
   async findSimilarUsers(userId, limit = 50) {
     try {
-      // Get user's ratings and interactions
-      const userRatings = await prisma.rating.findMany({
-        where: { userId },
-        include: { song: true }
-      });
+      // Get user's ratings, interactions, and likes
+      const [userRatings, userInteractions, userLikes] = await Promise.all([
+        prisma.rating.findMany({ where: { userId }, include: { song: true } }),
+        prisma.userSongInteraction.findMany({ where: { userId }, include: { song: true } }),
+        prisma.userSongLike.findMany({ where: { userId }, include: { song: true } })
+      ]);
 
-      const userInteractions = await prisma.userSongInteraction.findMany({
-        where: { userId },
-        include: { song: true }
-      });
-
-      if (userRatings.length === 0 && userInteractions.length === 0) {
+      if (userRatings.length === 0 && userInteractions.length === 0 && userLikes.length === 0) {
         return [];
       }
 
       // Create user profile vector
-      const userProfile = this.createUserProfile(userRatings, userInteractions);
+      const userProfile = this.createUserProfile(userRatings, userInteractions, userLikes);
       
       // Find other users with interactions
       const otherUsers = await prisma.user.findMany({
@@ -204,9 +200,9 @@ export class CollaborativeFiltering {
   }
 
   /**
-   * Create user profile from ratings and interactions
+   * Create user profile from ratings, interactions, and likes
    */
-  createUserProfile(ratings, interactions) {
+  createUserProfile(ratings, interactions, likes = []) {
     const profile = {
       genres: {},
       moods: {},
@@ -235,12 +231,27 @@ export class CollaborativeFiltering {
       }
     }
 
-    // Process interactions
+    // Process interactions (plays)
     for (const interaction of interactions) {
       const weight = Math.min(interaction.playCount / 10, 1);
       profile.totalWeight += weight;
 
       const features = songToFeatureVector(interaction.song);
+      if (features) {
+        for (const [key, value] of Object.entries(features)) {
+          if (profile.audioFeatures[key] !== undefined && value !== null) {
+            profile.audioFeatures[key] += value * weight;
+          }
+        }
+      }
+    }
+
+    // Process likes (weight 1 per like)
+    for (const like of likes) {
+      const weight = 1;
+      profile.totalWeight += weight;
+
+      const features = songToFeatureVector(like.song);
       if (features) {
         for (const [key, value] of Object.entries(features)) {
           if (profile.audioFeatures[key] !== undefined && value !== null) {
@@ -731,9 +742,9 @@ export class HybridRecommendationEngine {
    */
   async getRecommendations(userId, options = {}) {
     const {
-      collaborativeWeight = 0.3,
-      contentBasedWeight = 0.3,
-      aiEnhancedWeight = 0.3,
+      collaborativeWeight = 0.15,
+      contentBasedWeight = 0.55,
+      aiEnhancedWeight = 0.2,
       popularityWeight = 0.1,
       limit = 20
     } = options;
@@ -844,17 +855,15 @@ export class HybridRecommendationEngine {
    */
   async getColdStartRecommendations(userId, limit = 20) {
     try {
-      // Check if user has any interactions
-      const userInteractions = await prisma.userSongInteraction.count({
-        where: { userId }
-      });
+      // Check if user has any signal (likes, plays, or ratings)
+      const [userInteractions, userRatings, userLikes] = await Promise.all([
+        prisma.userSongInteraction.count({ where: { userId } }),
+        prisma.rating.count({ where: { userId } }),
+        prisma.userSongLike.count({ where: { userId } })
+      ]);
 
-      const userRatings = await prisma.rating.count({
-        where: { userId }
-      });
-
-      // If user has some interactions, use hybrid approach
-      if (userInteractions > 0 || userRatings > 0) {
+      // If user has any signal, use the full hybrid path
+      if (userInteractions > 0 || userRatings > 0 || userLikes > 0) {
         return this.getRecommendations(userId, { limit });
       }
 
