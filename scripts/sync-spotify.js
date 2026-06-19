@@ -8,8 +8,9 @@
 const https = require('https');
 const http = require('http');
 
-const SPOTIFY_SYNC_URL = 'http://127.0.0.1:3000/api/sync/spotify';
-const AUDIO_FEATURES_URL = 'http://127.0.0.1:3000/api/sync/spotify-audio-features';
+const BASE_URL = process.env.SYNC_BASE_URL || 'http://127.0.0.1:3000';
+const SPOTIFY_SYNC_URL = `${BASE_URL}/api/sync/spotify`;
+const AUDIO_FEATURES_URL = `${BASE_URL}/api/sync/spotify-audio-features`;
 
 async function makeRequest(url, data) {
   return new Promise((resolve, reject) => {
@@ -20,7 +21,8 @@ async function makeRequest(url, data) {
       },
     };
 
-    const req = http.request(url, options, (res) => {
+    const client = url.startsWith('https') ? https : http;
+    const req = client.request(url, options, (res) => {
       let responseData = '';
       
       res.on('data', (chunk) => {
