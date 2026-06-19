@@ -89,17 +89,17 @@ export class CollaborativeFiltering {
       // Get user's liked/interacted songs
       const userInteractions = await prisma.userSongInteraction.findMany({
         where: { userId },
-        include: { song: { include: { genres: true, moods: true } } }
+        include: { song: { include: { genres: { include: { genre: true } }, moods: { include: { mood: true } } } } }
       });
 
       const userLikes = await prisma.userSongLike.findMany({
         where: { userId },
-        include: { song: { include: { genres: true, moods: true } } }
+        include: { song: { include: { genres: { include: { genre: true } }, moods: { include: { mood: true } } } } }
       });
 
       const userRatedSongs = await prisma.rating.findMany({
         where: { userId, rating: { gte: 4 } }, // High ratings only
-        include: { song: { include: { genres: true, moods: true } } }
+        include: { song: { include: { genres: { include: { genre: true } }, moods: { include: { mood: true } } } } }
       });
 
       const userSongs = [
@@ -112,7 +112,7 @@ export class CollaborativeFiltering {
 
       // Get all songs for similarity comparison
       const allSongs = await prisma.song.findMany({
-        include: { genres: true, moods: true }
+        include: { genres: { include: { genre: true } }, moods: { include: { mood: true } } }
       });
 
       // Find similar songs
@@ -380,7 +380,7 @@ export class ContentBasedFiltering {
 
       // Get all songs
       const allSongs = await prisma.song.findMany({
-        include: { genres: true, moods: true }
+        include: { genres: { include: { genre: true } }, moods: { include: { mood: true } } }
       });
 
       // Calculate similarity scores
@@ -416,17 +416,17 @@ export class ContentBasedFiltering {
   async getUserPreferences(userId) {
     const interactions = await prisma.userSongInteraction.findMany({
       where: { userId },
-      include: { song: { include: { genres: true, moods: true } } }
+      include: { song: { include: { genres: { include: { genre: true } }, moods: { include: { mood: true } } } } }
     });
 
     const likes = await prisma.userSongLike.findMany({
       where: { userId },
-      include: { song: { include: { genres: true, moods: true } } }
+      include: { song: { include: { genres: { include: { genre: true } }, moods: { include: { mood: true } } } } }
     });
 
     const ratings = await prisma.rating.findMany({
       where: { userId, rating: { gte: 4 } },
-      include: { song: { include: { genres: true, moods: true } } }
+      include: { song: { include: { genres: { include: { genre: true } }, moods: { include: { mood: true } } } } }
     });
 
     return [
@@ -586,8 +586,8 @@ export class ContentBasedFiltering {
    * Calculate genre similarity with predictions
    */
   calculateGenreSimilarityWithPredictions(song1, song2) {
-    const genres1 = song1.genres?.map(g => g.name) || this.predictGenresFromMetadata(song1);
-    const genres2 = song2.genres?.map(g => g.name) || this.predictGenresFromMetadata(song2);
+    const genres1 = song1.genres?.map(g => g.genre.name) || this.predictGenresFromMetadata(song1);
+    const genres2 = song2.genres?.map(g => g.genre.name) || this.predictGenresFromMetadata(song2);
 
     if (genres1.length === 0 || genres2.length === 0) return 0;
 
@@ -599,8 +599,8 @@ export class ContentBasedFiltering {
    * Calculate mood similarity with predictions
    */
   calculateMoodSimilarityWithPredictions(song1, song2) {
-    const moods1 = song1.moods?.map(m => m.name) || this.predictMoodsFromMetadata(song1);
-    const moods2 = song2.moods?.map(m => m.name) || this.predictMoodsFromMetadata(song2);
+    const moods1 = song1.moods?.map(m => m.mood.name) || this.predictMoodsFromMetadata(song1);
+    const moods2 = song2.moods?.map(m => m.mood.name) || this.predictMoodsFromMetadata(song2);
 
     if (moods1.length === 0 || moods2.length === 0) return 0;
 
@@ -612,8 +612,8 @@ export class ContentBasedFiltering {
    * Calculate genre similarity
    */
   calculateGenreSimilarity(song1, song2) {
-    const genres1 = song1.genres.map(g => g.name);
-    const genres2 = song2.genres.map(g => g.name);
+    const genres1 = song1.genres.map(g => g.genre.name);
+    const genres2 = song2.genres.map(g => g.genre.name);
 
     if (genres1.length === 0 || genres2.length === 0) return 0;
 
@@ -625,8 +625,8 @@ export class ContentBasedFiltering {
    * Calculate mood similarity
    */
   calculateMoodSimilarity(song1, song2) {
-    const moods1 = song1.moods.map(m => m.name);
-    const moods2 = song2.moods.map(m => m.name);
+    const moods1 = song1.moods.map(m => m.mood.name);
+    const moods2 = song2.moods.map(m => m.mood.name);
 
     if (moods1.length === 0 || moods2.length === 0) return 0;
 
@@ -702,7 +702,7 @@ export class ContentBasedFiltering {
           { popularity: 'desc' }
         ],
         take: limit,
-        include: { genres: true, moods: true }
+        include: { genres: { include: { genre: true } }, moods: { include: { mood: true } } }
       });
 
       return songs.map(song => ({

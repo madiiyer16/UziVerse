@@ -63,10 +63,10 @@ export async function GET(request) {
       },
 
       // Genres (with AI predictions if missing)
-      genres: rec.genres?.map(g => g.name) || rec.predictedGenres || ['Unknown'],
-      
+      genres: rec.genres?.map(g => g.genre.name) || rec.predictedGenres || ['Unknown'],
+
       // Moods (with AI predictions if missing)
-      moods: rec.moods?.map(m => m.name) || rec.predictedMoods || ['Neutral'],
+      moods: rec.moods?.map(m => m.mood.name) || rec.predictedMoods || ['Neutral'],
 
       // Additional metadata
       popularity: rec.popularity || 0,
@@ -151,7 +151,7 @@ async function getUserTopGenres(userId) {
       include: {
         song: {
           include: {
-            genres: true
+            genres: { include: { genre: true } }
           }
         }
       }
@@ -161,7 +161,7 @@ async function getUserTopGenres(userId) {
     for (const like of likedSongs) {
       const genres = like.song.genres || [];
       for (const genre of genres) {
-        genreCounts[genre.name] = (genreCounts[genre.name] || 0) + 1;
+        genreCounts[genre.genre.name] = (genreCounts[genre.genre.name] || 0) + 1;
       }
     }
 

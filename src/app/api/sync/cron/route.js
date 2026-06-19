@@ -431,7 +431,7 @@ async function updateGenresAndMoods(tracks) {
         try {
           const song = await prisma.song.findUnique({
             where: { spotifyId: track.id },
-            include: { genres: true, moods: true }
+            include: { genres: { include: { genre: true } }, moods: { include: { mood: true } } }
           });
 
           if (song) {

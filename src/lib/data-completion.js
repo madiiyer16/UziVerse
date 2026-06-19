@@ -72,7 +72,7 @@ export class DataCompletionEngine {
     try {
       const song = await prisma.song.findUnique({
         where: { id: songId },
-        include: { genres: true, moods: true }
+        include: { genres: { include: { genre: true } }, moods: { include: { mood: true } } }
       });
 
       if (!song) {
@@ -120,7 +120,7 @@ export class DataCompletionEngine {
 
     const songs = await prisma.song.findMany({
       where: whereClause,
-      include: { genres: true, moods: true },
+      include: { genres: { include: { genre: true } }, moods: { include: { mood: true } } },
       take: maxSongs,
       orderBy: { createdAt: 'desc' }
     });
@@ -226,7 +226,7 @@ export class DataCompletionEngine {
     // Return updated song
     return await prisma.song.findUnique({
       where: { id: song.id },
-      include: { genres: true, moods: true }
+      include: { genres: { include: { genre: true } }, moods: { include: { mood: true } } }
     });
   }
 
@@ -332,7 +332,7 @@ export class DataCompletionEngine {
       console.log('🧹 Starting data validation and cleaning...');
 
       const songs = await prisma.song.findMany({
-        include: { genres: true, moods: true }
+        include: { genres: { include: { genre: true } }, moods: { include: { mood: true } } }
       });
 
       let cleaned = 0;

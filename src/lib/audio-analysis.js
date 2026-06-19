@@ -374,8 +374,8 @@ export function calculateAdvancedSimilarity(song1, song2, weights = {}) {
 
   // Genre similarity (if available)
   if (song1.genres && song2.genres) {
-    const genre1Names = song1.genres.map(g => g.name);
-    const genre2Names = song2.genres.map(g => g.name);
+    const genre1Names = song1.genres.map(g => g.genre.name);
+    const genre2Names = song2.genres.map(g => g.genre.name);
     const commonGenres = genre1Names.filter(g => genre2Names.includes(g));
     const genreScore = commonGenres.length / Math.max(genre1Names.length, genre2Names.length);
     totalScore += genreScore * finalWeights.genre;
@@ -383,8 +383,8 @@ export function calculateAdvancedSimilarity(song1, song2, weights = {}) {
 
   // Mood similarity (if available)
   if (song1.moods && song2.moods) {
-    const mood1Names = song1.moods.map(m => m.name);
-    const mood2Names = song2.moods.map(m => m.name);
+    const mood1Names = song1.moods.map(m => m.mood.name);
+    const mood2Names = song2.moods.map(m => m.mood.name);
     const commonMoods = mood1Names.filter(m => mood2Names.includes(m));
     const moodScore = commonMoods.length / Math.max(mood1Names.length, mood2Names.length);
     totalScore += moodScore * finalWeights.mood;

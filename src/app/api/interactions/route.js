@@ -150,8 +150,8 @@ export async function GET(request) {
       include: {
         song: {
           include: {
-            genres: true,
-            moods: true
+            genres: { include: { genre: true } },
+            moods: { include: { mood: true } }
           }
         }
       },
@@ -166,8 +166,8 @@ export async function GET(request) {
       include: {
         song: {
           include: {
-            genres: true,
-            moods: true
+            genres: { include: { genre: true } },
+            moods: { include: { mood: true } }
           }
         }
       },
@@ -182,8 +182,8 @@ export async function GET(request) {
       include: {
         song: {
           include: {
-            genres: true,
-            moods: true
+            genres: { include: { genre: true } },
+            moods: { include: { mood: true } }
           }
         }
       },

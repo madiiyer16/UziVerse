@@ -36,8 +36,8 @@ export class AIFeaturePredictor {
           ]
         },
         include: {
-          genres: true,
-          moods: true
+          genres: { include: { genre: true } },
+          moods: { include: { mood: true } }
         }
       });
 
@@ -223,7 +223,7 @@ export class AIFeaturePredictor {
 
     // If song already has genres, return them
     if (song.genres && song.genres.length > 0) {
-      return song.genres.map(g => g.name);
+      return song.genres.map(g => g.genre.name);
     }
 
     const audioFeatures = await this.predictAudioFeatures(song);
@@ -240,7 +240,7 @@ export class AIFeaturePredictor {
 
     // If song already has moods, return them
     if (song.moods && song.moods.length > 0) {
-      return song.moods.map(m => m.name);
+      return song.moods.map(m => m.mood.name);
     }
 
     const audioFeatures = await this.predictAudioFeatures(song);
@@ -273,7 +273,7 @@ export class AIFeaturePredictor {
     const genreFeatures = {};
     
     for (const song of trainingData) {
-      const genres = song.genres.map(g => g.name);
+      const genres = song.genres.map(g => g.genre.name);
       const features = this.extractAudioFeatures(song);
       
       for (const genre of genres) {
@@ -300,7 +300,7 @@ export class AIFeaturePredictor {
     const moodFeatures = {};
     
     for (const song of trainingData) {
-      const moods = song.moods.map(m => m.name);
+      const moods = song.moods.map(m => m.mood.name);
       const features = this.extractAudioFeatures(song);
       
       for (const mood of moods) {
@@ -539,7 +539,7 @@ export class AIFeaturePredictor {
     predictions.push(...titlePredictions.map(p => ({ mood: p, confidence: 0.5, method: 'title' })));
 
     // Method 4: Genre-based prediction
-    const genrePredictions = this.predictMoodsFromGenres(song.genres || []);
+    const genrePredictions = this.predictMoodsFromGenres(song.genres?.map(g => g.genre?.name).filter(Boolean) || []);
     predictions.push(...genrePredictions.map(p => ({ mood: p, confidence: 0.4, method: 'genre' })));
 
     // Combine predictions using weighted voting
@@ -893,7 +893,7 @@ export class AIEnhancedRecommendationEngine {
         where: { userId },
         include: { 
           song: { 
-            include: { genres: true, moods: true } 
+            include: { genres: { include: { genre: true } }, moods: { include: { mood: true } } } 
           } 
         }
       });
@@ -912,7 +912,7 @@ export class AIEnhancedRecommendationEngine {
 
       // Get all songs and enhance them
       const allSongs = await prisma.song.findMany({
-        include: { genres: true, moods: true }
+        include: { genres: { include: { genre: true } }, moods: { include: { mood: true } } }
       });
 
       const enhancedAllSongs = [];
@@ -1056,8 +1056,8 @@ export class AIEnhancedRecommendationEngine {
    * Calculate genre similarity
    */
   calculateGenreSimilarity(song1, song2) {
-    const genres1 = song1.genres?.map(g => g.name) || song1.predictedGenres || [];
-    const genres2 = song2.genres?.map(g => g.name) || song2.predictedGenres || [];
+    const genres1 = song1.genres?.map(g => g.genre.name) || song1.predictedGenres || [];
+    const genres2 = song2.genres?.map(g => g.genre.name) || song2.predictedGenres || [];
 
     if (genres1.length === 0 || genres2.length === 0) return 0;
 
@@ -1069,8 +1069,8 @@ export class AIEnhancedRecommendationEngine {
    * Calculate mood similarity
    */
   calculateMoodSimilarity(song1, song2) {
-    const moods1 = song1.moods?.map(m => m.name) || song1.predictedMoods || [];
-    const moods2 = song2.moods?.map(m => m.name) || song2.predictedMoods || [];
+    const moods1 = song1.moods?.map(m => m.mood.name) || song1.predictedMoods || [];
+    const moods2 = song2.moods?.map(m => m.mood.name) || song2.predictedMoods || [];
 
     if (moods1.length === 0 || moods2.length === 0) return 0;
 
@@ -1090,7 +1090,7 @@ export class AIEnhancedRecommendationEngine {
           { totalPlays: 'desc' }
         ],
         take: limit,
-        include: { genres: true, moods: true }
+        include: { genres: { include: { genre: true } }, moods: { include: { mood: true } } }
       });
 
       return songs.map(song => ({
