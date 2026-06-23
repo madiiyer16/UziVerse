@@ -1,6 +1,6 @@
 # Offline Evaluation Results
 
-Generated: 2026-06-21T20:40:11.247Z
+Generated: 2026-06-23T01:55:01.991Z
 Synthetic users: 50 | Catalog size: 239 songs
 Protocol: leave-one-out (held-out = most recent like per user)
 
@@ -26,11 +26,11 @@ bias — popularity preference is captured only through the user's own f1 compon
 | Random (seeded)  | 0.060  | 0.080 | 0.140 | 0.039   | 0.044    | 0.060    | 0.034 | 0.992 | 0.312 |
 | Most popular     | 0.020  | 0.020 | 0.140 | 0.010   | 0.010    | 0.041    | 0.007 | 0.134 | 0.363 |
 | Content-based    | 0.080  | 0.120 | 0.180 | 0.050   | 0.064    | 0.078    | 0.047 | 0.741 | 0.014 |
-| CF (item-audio)  | 0.040  | 0.040 | 0.040 | 0.040   | 0.040    | 0.040    | 0.040 | 0.046 | 0.677 |
-| Hybrid + AI      | 0.040  | 0.120 | 0.180 | 0.028   | 0.054    | 0.068    | 0.036 | 0.741 | 0.014 |
-| Hybrid no AI     | 0.080  | 0.120 | 0.180 | 0.050   | 0.064    | 0.078    | 0.047 | 0.741 | 0.014 |
+| CF (item-audio)  | 0.140  | 0.220 | 0.360 | 0.087   | 0.112    | 0.145    | 0.079 | 0.728 | 0.306 |
+| Hybrid + AI      | 0.080  | 0.120 | 0.180 | 0.061   | 0.074    | 0.088    | 0.060 | 0.741 | 0.014 |
+| Hybrid no AI     | 0.100  | 0.120 | 0.180 | 0.077   | 0.084    | 0.099    | 0.073 | 0.741 | 0.014 |
 
-**Winner on NDCG@10:** Content-based (0.064)
+**Winner on NDCG@10:** CF (item-audio) (0.112)
 **AI-tier experiment:** removing the degenerate AI tier **helped (no-AI NDCG@10 +0.010 vs with-AI)**.
 
 ## Notes

@@ -77,66 +77,98 @@ export class CollaborativeFiltering {
   }
 
   /**
-   * Item-based collaborative filtering
-   * Find songs similar to ones the user has interacted with
+   * Item-based collaborative filtering on like co-occurrence.
+   *
+   * Audio-feature cosine similarity is dead (all features null after Spotify
+   * deprecated /audio-features). This replaces it with BEHAVIORAL signal:
+   * two songs are similar if many of the same users liked both.
+   *
+   * Math:
+   *   Let U_k = set of users who liked song k.
+   *   Jaccard sim(i, j) = |U_i ∩ U_j| / |U_i ∪ U_j|
+   *
+   *   For target user u with training likes T:
+   *   score(u, j) = (1/|T|) * Σ_{i ∈ T} sim(i, j)
+   *
+   *   i.e. mean Jaccard similarity of candidate j to every song in T.
+   *   Songs no one else has liked get no CF signal; the hybrid CB tier
+   *   covers those.
+   *
+   * Cold start: returns [] if the user has no likes or no co-like overlap
+   * exists. HybridRecommendationEngine.getColdStartRecommendations handles
+   * the cold-start production path.
    */
   async findSimilarItems(userId, limit = 20) {
     try {
-      // Get user's liked/interacted songs
-      const userInteractions = await prisma.userSongInteraction.findMany({
-        where: { userId },
-        include: { song: { include: { genres: { include: { genre: true } }, moods: { include: { mood: true } } } } }
+      // Single read of the full like table — small enough to fit in memory
+      const allLikes = await prisma.userSongLike.findMany({
+        select: { userId: true, songId: true }
       });
 
-      const userLikes = await prisma.userSongLike.findMany({
-        where: { userId },
-        include: { song: { include: { genres: { include: { genre: true } }, moods: { include: { mood: true } } } } }
-      });
+      // Build bidirectional indices
+      const itemUsers = new Map(); // songId  → Set<userId>
+      const userItems = new Map(); // userId  → Set<songId>
+      for (const { userId: uid, songId } of allLikes) {
+        if (!itemUsers.has(songId)) itemUsers.set(songId, new Set());
+        itemUsers.get(songId).add(uid);
+        if (!userItems.has(uid)) userItems.set(uid, new Set());
+        userItems.get(uid).add(songId);
+      }
 
-      const userRatedSongs = await prisma.rating.findMany({
-        where: { userId, rating: { gte: 4 } }, // High ratings only
-        include: { song: { include: { genres: { include: { genre: true } }, moods: { include: { mood: true } } } } }
-      });
+      const trainSet = userItems.get(userId);
+      if (!trainSet || trainSet.size === 0) return [];
 
-      const userSongs = [
-        ...userInteractions.map(i => ({ ...i.song, interaction: i })),
-        ...userLikes.map(l => ({ ...l.song, liked: true })),
-        ...userRatedSongs.map(r => ({ ...r.song, rating: r.rating }))
-      ];
+      // For each training item i, accumulate Jaccard(i, j) into each candidate j
+      const scores = new Map(); // candidateSongId → sum of Jaccard scores
+      for (const trainId of trainSet) {
+        const trainUsers = itemUsers.get(trainId) ?? new Set();
 
-      if (userSongs.length === 0) return [];
+        for (const [candidateId, candidateUsers] of itemUsers) {
+          if (trainSet.has(candidateId)) continue; // already liked by this user
 
-      // Get all songs for similarity comparison
-      const allSongs = await prisma.song.findMany({
-        include: { genres: { include: { genre: true } }, moods: { include: { mood: true } } }
-      });
+          // Intersection: iterate the smaller set for efficiency
+          const [smaller, larger] =
+            trainUsers.size <= candidateUsers.size
+              ? [trainUsers, candidateUsers]
+              : [candidateUsers, trainUsers];
+          let interSize = 0;
+          for (const u of smaller) { if (larger.has(u)) interSize++; }
+          if (interSize === 0) continue;
 
-      // Find similar songs
-      const recommendations = new Map();
-      
-      for (const userSong of userSongs) {
-        const similarSongs = findSimilarSongs(userSong, allSongs, 10);
-        
-        for (const similarSong of similarSongs) {
-          if (userSongs.some(us => us.id === similarSong.id)) continue; // Skip already interacted songs
-          
-          const existingScore = recommendations.get(similarSong.id);
-          const newScore = similarSong.similarity * this.getUserSongWeight(userSong);
-          
-          recommendations.set(similarSong.id, {
-            song: similarSong,
-            score: existingScore ? Math.max(existingScore.score, newScore) : newScore,
-            basedOn: userSong.title
-          });
+          const unionSize = trainUsers.size + candidateUsers.size - interSize;
+          scores.set(candidateId, (scores.get(candidateId) ?? 0) + interSize / unionSize);
         }
       }
 
-      return Array.from(recommendations.values())
+      if (scores.size === 0) return [];
+
+      // Normalise to mean similarity and rank
+      const ranked = [...scores.entries()]
+        .map(([songId, total]) => ({ songId, score: total / trainSet.size }))
         .sort((a, b) => b.score - a.score)
         .slice(0, limit);
 
+      // Hydrate with full song objects for the hybrid engine
+      const songIds = ranked.map(r => r.songId);
+      const songs = await prisma.song.findMany({
+        where: { id: { in: songIds } },
+        include: {
+          genres: { include: { genre: true } },
+          moods:  { include: { mood: true } }
+        }
+      });
+      const songMap = new Map(songs.map(s => [s.id, s]));
+
+      return ranked
+        .filter(r => songMap.has(r.songId))
+        .map(r => ({
+          song:    songMap.get(r.songId),
+          score:   r.score,
+          basedOn: 'co-liked by similar users'
+        }));
+
     } catch (error) {
-      console.error('Error finding similar items:', error);
+      console.error('Error in item-based CF:', error);
       return [];
     }
   }
@@ -297,36 +329,27 @@ export class CollaborativeFiltering {
   }
 
   /**
-   * Build interaction matrix from database
+   * Build interaction matrix from database (ratings + plays + likes).
+   * Used by matrixFactorization. Likes are implicit feedback valued at 1.0.
    */
   async buildInteractionMatrix() {
-    const ratings = await prisma.rating.findMany({
-      include: { song: true }
-    });
-
-    const interactions = await prisma.userSongInteraction.findMany({
-      include: { song: true }
-    });
+    const [ratings, interactions, likes] = await Promise.all([
+      prisma.rating.findMany({ select: { userId: true, songId: true, rating: true } }),
+      prisma.userSongInteraction.findMany({ select: { userId: true, songId: true, playCount: true } }),
+      prisma.userSongLike.findMany({ select: { userId: true, songId: true } })
+    ]);
 
     const matrix = [];
 
-    // Convert ratings to matrix entries
-    for (const rating of ratings) {
-      matrix.push({
-        userId: rating.userId,
-        songId: rating.songId,
-        rating: rating.rating / 5 // Normalize to 0-1
-      });
+    for (const r of ratings) {
+      matrix.push({ userId: r.userId, songId: r.songId, rating: r.rating / 5 });
     }
-
-    // Convert interactions to matrix entries
-    for (const interaction of interactions) {
-      const playScore = Math.min(interaction.playCount / 10, 1);
-      matrix.push({
-        userId: interaction.userId,
-        songId: interaction.songId,
-        rating: playScore
-      });
+    for (const i of interactions) {
+      matrix.push({ userId: i.userId, songId: i.songId, rating: Math.min(i.playCount / 10, 1) });
+    }
+    for (const l of likes) {
+      // Implicit feedback: a like is treated as a confident positive signal (1.0)
+      matrix.push({ userId: l.userId, songId: l.songId, rating: 1.0 });
     }
 
     return matrix;
