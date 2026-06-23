@@ -13,7 +13,8 @@
     "sync:spotify": "node scripts/sync-spotify.js",
     "sync:cron": "curl -X POST http://localhost:3000/api/sync/cron -H 'Content-Type: application/json' -H 'Authorization: Bearer your-cron-secret' -d '{}'",
     "eval:gen": "tsx scripts/eval-data-gen.js",
-    "eval": "tsx scripts/eval.js"
+    "eval": "tsx scripts/eval.js",
+    "eval:sweep": "tsx scripts/eval-sweep.js"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.10.0",
