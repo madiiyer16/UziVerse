@@ -885,9 +885,17 @@ export class HybridRecommendationEngine {
         prisma.userSongLike.count({ where: { userId } })
       ]);
 
-      // If user has any signal, use the full hybrid path
+      // If user has any signal, use the full hybrid path with sweep-tuned weights.
+      // Weights from offline eval (eval:sweep): CF beats CB on NDCG@10 (0.112 vs 0.064);
+      // best blend wCF=0.70, wCB=0.15, wPop=0.15, AI=0 (AI tier is degenerate — uniform scores).
       if (userInteractions > 0 || userRatings > 0 || userLikes > 0) {
-        return this.getRecommendations(userId, { limit });
+        return this.getRecommendations(userId, {
+          limit,
+          collaborativeWeight: 0.70,
+          contentBasedWeight:  0.15,
+          aiEnhancedWeight:    0,
+          popularityWeight:    0.15
+        });
       }
 
       // Cold start: return popular and diverse songs

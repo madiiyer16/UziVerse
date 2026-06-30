@@ -43,8 +43,9 @@ export async function GET(request) {
       album: rec.album,
       year: rec.year,
       imageUrl: rec.imageUrl,
-      spotifyUrl: rec.spotifyUrl,
-      youtubeUrl: rec.youtubeUrl,
+      // Song schema stores IDs, not URLs — compute them here
+      spotifyUrl: rec.spotifyId ? `https://open.spotify.com/track/${rec.spotifyId}` : null,
+      youtubeUrl: rec.youtubeId ? `https://www.youtube.com/watch?v=${rec.youtubeId}` : null,
       soundcloudId: rec.soundcloudId,
       recommendationScore: rec.recommendationScore ?? rec.similarity ?? 0,
       basedOn: rec.details?.basedOn || rec.details?.reason || null,

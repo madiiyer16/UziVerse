@@ -68,11 +68,20 @@ const UziRecommender = () => {
 
     try {
       setLoading(true);
-      const response = await fetch('/api/recommendations/personalized');
+      const response = await fetch('/api/recommendations/ai-enhanced');
       const data = await response.json();
 
       if (data.success) {
-        setForYouRecommendations(data.data?.recommendations || data.recommendations || []);
+        // Normalize ai-enhanced response shape to match SongCard expectations:
+        // ai-enhanced uses `genres`/`moods` arrays; SongCard reads `genre`/`mood`.
+        // Song schema stores IDs not URLs, but ai-enhanced route already resolves them.
+        const recs = (data.recommendations || []).map(rec => ({
+          ...rec,
+          genre: rec.genres || [],
+          mood:  rec.moods  || [],
+          isLiked: false
+        }));
+        setForYouRecommendations(recs);
       }
     } catch (error) {
       console.error('Error fetching For You recommendations:', error);
@@ -135,6 +144,16 @@ const UziRecommender = () => {
     );
   };
 
+  const formatExplanation = (basedOn, sources) => {
+    if (basedOn === 'co-liked by similar users' || sources?.includes('collaborative')) {
+      return 'Listeners with similar taste liked this';
+    }
+    if (sources?.includes('content-based')) return 'Similar to songs you like';
+    if (sources?.includes('cold-start') || sources?.includes('popularity')) return 'Popular among fans';
+    if (basedOn) return basedOn;
+    return null;
+  };
+
   const SongCard = ({ song }) => (
     <div className="bg-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-100">
       {/* Album Artwork */}
@@ -158,6 +177,11 @@ const UziRecommender = () => {
               <LikeButton songId={song.id} initialLiked={song.isLiked} />
             </div>
             <p className="text-purple-600 font-medium">{song.album} ({song.year})</p>
+            {song.sources?.length > 0 && (
+              <p className="text-xs text-indigo-500 mt-1 italic">
+                {formatExplanation(song.basedOn, song.sources)}
+              </p>
+            )}
             <div className="flex flex-wrap gap-2 mt-2">
               {song.genre?.map(g => (
                 <span key={g} className="px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-xs">{g}</span>
