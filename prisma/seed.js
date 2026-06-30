@@ -1,4 +1,5 @@
 const { PrismaClient } = require('@prisma/client');
+const bcrypt = require('bcryptjs');
 
 const prisma = new PrismaClient();
 
@@ -168,13 +169,16 @@ async function main() {
     }
   }
 
-  // Create a sample user
+  // Create a demo user with a known password and liked songs so the For You
+  // tab shows real hybrid-CF recommendations on first visit.
+  const demoPassword = await bcrypt.hash('demo1234', 10);
   const sampleUser = await prisma.user.upsert({
     where: { email: 'demo@uziverse.com' },
-    update: {},
+    update: { hashedPassword: demoPassword },
     create: {
       username: 'uzilover23',
       email: 'demo@uziverse.com',
+      hashedPassword: demoPassword
     }
   });
 
@@ -211,6 +215,37 @@ async function main() {
       }
     });
   }
+
+  // Seed demo user likes so the For You tab hits the hybrid-CF path (not cold-start).
+  // Titles chosen for variety across albums/eras; query dynamically so IDs don't
+  // need to be hardcoded.
+  const demoLikeTitles = [
+    'XO Tour Llif3',
+    'Money Longer',
+    'Futsal Shuffle 2020',
+    'Baby Pluto',
+    'Just Wanna Rock',
+    'Neon Guts',
+    'Sanguine Paradise',
+    'Ps & Qs',
+    'Erase Your Social',
+    'Sauce It Up'
+  ];
+
+  const demoLikeSongs = await prisma.song.findMany({
+    where: { title: { in: demoLikeTitles } },
+    select: { id: true, title: true }
+  });
+
+  for (const song of demoLikeSongs) {
+    await prisma.userSongLike.upsert({
+      where: { userId_songId: { userId: sampleUser.id, songId: song.id } },
+      update: {},
+      create: { userId: sampleUser.id, songId: song.id }
+    });
+  }
+
+  console.log(`Seeded ${demoLikeSongs.length} likes for demo user (uzilover23 / demo1234)`);
 
   console.log('✅ Database seed completed!');
   console.log(`Created ${genres.length} genres, ${moods.length} moods, ${sampleSongs.length} songs`);
