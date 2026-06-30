@@ -92,12 +92,7 @@ export async function GET(request) {
     
     const candidateSongs = await prisma.song.findMany({
       where: {
-        id: { notIn: likedSongIds },
-        // Ensure songs have some audio features
-        OR: [
-          { energy: { not: null, gt: 0 } },
-          { danceability: { not: null, gt: 0 } }
-        ]
+        id: { notIn: likedSongIds }
       },
       include: {
         genres: {
