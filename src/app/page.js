@@ -456,6 +456,10 @@ const UziRecommender = () => {
 
         {selectedSong && <SongDetailModal song={selectedSong} onClose={() => setSelectedSong(null)} />}
       </div>
+
+      <footer className="text-center text-xs text-gray-400 py-4">
+        build {process.env.NEXT_PUBLIC_DEPLOY_SHA || 'local'} · {process.env.NEXT_PUBLIC_DEPLOY_ENV || 'local'}
+      </footer>
     </div>
   );
 };
